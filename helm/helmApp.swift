@@ -1,17 +1,12 @@
-//
-//  helmApp.swift
-//  helm
-//
-//  Created by Kwaku Amo-Korankye on 27/06/2026.
-//
-
 import SwiftUI
 
 @main
-struct helmApp: App {
+struct HelmApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1280, height: 800)
     }
 }
