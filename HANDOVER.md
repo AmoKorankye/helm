@@ -131,9 +131,9 @@ and `shell` services.
 | Phase | Scope | Status |
 |-------|-------|--------|
 | **1 — Foundation** | Xcode project, libghostty embedded, one working terminal, launch claude | ✅ Done |
-| **1.5 — Session decoupling** | Extract `SessionManager`/`TerminalSession`; retire `@StateObject`+`.id()` terminal ownership; AppKit host container so sessions survive switching. **Critical path — gates all later phases.** | ⬜ Next |
-| **2 — Projects & Services** | Add/edit/delete projects & services in-app (currently seed-only), config UI | ⬜ |
-| **3 — Process management** | Start/stop/restart, status indicators (running/stopped/crashed), auto-restart, log view | ⬜ |
+| **1.5 — Session decoupling** | Extract `SessionManager`/`TerminalSession`; retire `@StateObject`+`.id()` terminal ownership; AppKit host container so sessions survive switching. **Critical path — gates all later phases.** | ✅ Done |
+| **2 — Projects & Services** | Add/edit/delete projects & services in-app (currently seed-only), config UI | ✅ Done |
+| **3 — Process management** | Start/stop/restart, status indicators (running/stopped/crashed), auto-restart, log view. **Option D: Helm-owned PTY (host-managed backend), no fork.** | ⬜ Planned — Next |
 | **4 — Worktrees** | Auto-detect git worktrees, launch services per worktree | ⬜ |
 | **5 — Agent layer** | Parse Claude output for working/waiting state, show in sidebar, quick-launch presets | ⬜ |
 | **6 — Always-on** | Sessions survive app close (tmux-backed), menu-bar pulse, notifications | ⬜ |
@@ -188,14 +188,22 @@ fighting it and tearing down PTYs on every service switch.
 | 5 | **Domain model stays Codable+JSON, grown additively** (all new fields defaulted): `environment`, `shell?` (nil = global `zsh -lic` default), `sortOrder`, `icon`, `colorHex`, `restartPolicy`, `persistent`, `worktreeEnabled`. Runtime state (status/pid/exit/agent-state) is **never persisted** — lives on `TerminalSession`. |
 | 6 | **Six deep modules:** `SessionManager`, `TerminalSession`, `ProcessSupervisor` (Ph3 — *decides* restart, doesn't spawn), `PersistenceStore` (split out of `AppStore`), `WorktreeService` (Ph4), `AgentStateDetector` (Ph5). **All libghostty coupling sealed behind SessionManager/TerminalSession** — no other file imports `GhosttyTerminal`. |
 | 7 | **Status is zero-poll** — `enum SessionStatus { starting, running, exited(code), crashed(code), detached }` driven by **kqueue `EVFILT_PROC`/`NOTE_EXIT` on the PTY child pid** + `waitpid` for the code. No timers, no read loops, no `git status` polling. |
-| 8 | **libghostty pid:** 1.3.1 does **not** expose the child pid, and its `COMMAND_FINISHED` exit path is OSC/shell-integration-driven (won't fire for `claude` via `zsh -lic`); `SHOW_CHILD_EXITED` is unbridged. → **Carry a small C-shim/patch to libghostty-spm** to expose the child pid + bridge `SHOW_CHILD_EXITED`. (Phase 3.) |
+| 8 | **libghostty pid / process model.** ~~Carry a small C-shim/patch~~ **SUPERSEDED (2026-06-27, Phase 3 planning).** 1.3.1 ships a **public host-managed backend** (`.inMemory` / `GHOSTTY_SURFACE_IO_BACKEND_HOST_MANAGED`) where **Helm owns the PTY** and feeds bytes to ghostty — so we get the child pid by construction, an authoritative exit code via our own `waitpid`, and a byte-tap for scrollback, with **no fork, no C-shim, and the prebuilt xcframework preserved**. **Decision: Option D — Helm-owned PTY (`PTYProcess`).** Cost: rewrite the Phase-1 `zsh -lic` spawn onto a Helm PTY (isolated in `PTYProcess`, verified at checkpoint 3); **tty-scan pid fallback** (still no fork) if it misbehaves; the fork is last resort only. Status via kqueue `EVFILT_PROC`/`NOTE_EXIT` on our pid (Decision #7). (Phase 3.) |
 | 9 | **On process exit:** show a **Helm restart affordance** (overlay + one-click restart), matching the service-dashboard model. |
 | 10 | **Shell config:** **global default (`zsh -lic`) + per-service env vars**; `shell?` field present-but-defaulted for the rare override. |
 | 11 | **Phase 2 CRUD:** modal **sheets** to create, **inspector** to edit, `NSOpenPanel` dir picker behind a helper, validation in a draft/form model (Views stay dumb). |
 | 12 | **Rust scope:** Phases 2–5 are **pure Swift** (libghostty already owns PTY/spawn/cwd/env). Rust is a **deferred Phase 6+ contingency** only — a tiny *observer* status-sidecar (Unix socket + length-prefixed JSON), never the PTY owner. |
 | 13 | **Phase 6 persistence = tmux-first** (Mori model): `tmux new-session -A -s helm-<key>` for idempotent attach/reattach; status via control-mode (`-CC`); logs via `pipe-pane` → file + `EVFILT_VNODE` tail. Accept a `brew install tmux` dependency w/ graceful degradation (tmux is **not** currently installed). Rust daemon only if a tmux spike fails. **Persistence is opt-in per service.** |
 
-**Corrected build order:** `1.5 → 2 → 3 (+pid patch) → 4 → 5 → 6 (tmux)`.
+**Corrected build order:** `1.5 → 2 → 3 (host-managed PTY) → 4 → 5 → 6 (tmux)`.
+
+**Phase 3 operational defaults (settled 2026-06-27):** auto-restart = 5 attempts,
+exponential backoff 1→16s, 30s reset window; non-zero exit *not* from our own Stop =
+`crashed` (red); Stop = SIGTERM→3s→SIGKILL; log view = collapsible bottom panel, ~5k-line
+ring buffer fed from the PTY byte-tap; restart overlay shown only over the selected dead
+session. Status is zero-poll (kqueue on our pid + `DispatchSource.makeProcessSource`).
+`ProcessSupervisor` *decides* (policy/backoff/classification); `TerminalSession` *acts*
+(owns `PTYProcess` + surface). New `Service.restartPolicy: {never,onCrash,always} = .never`.
 
 ---
 
