@@ -19,9 +19,7 @@ final class ProjectStore: ObservableObject {
     init(persistence: PersistenceStore = PersistenceStore()) {
         self.persistence = persistence
         projects = (try? persistence.load()) ?? []
-        if projects.isEmpty {
-            seedDefaults()
-        }
+        // No seeded defaults: a fresh install starts with an empty sidebar.
     }
 
     // MARK: - Project mutations
@@ -115,6 +113,19 @@ final class ProjectStore: ObservableObject {
         return nil
     }
 
+    /// Decide-time restart-policy lookup for `ProcessSupervisor` (m5): always read
+    /// the *current* saved policy so live inspector edits take effect on the next
+    /// exit without restarting. GhosttyTerminal-free; pure value lookup. Returns
+    /// `.never` if the service was deleted out from under a pending exit event.
+    func restartPolicy(forServiceID serviceID: UUID) -> RestartPolicy {
+        for project in projects {
+            if let service = project.services.first(where: { $0.id == serviceID }) {
+                return service.restartPolicy
+            }
+        }
+        return .never
+    }
+
     // MARK: - Internals
 
     /// Foundation-only reimplementation of `Array.move(fromOffsets:toOffset:)`
@@ -135,20 +146,5 @@ final class ProjectStore: ObservableObject {
 
     private func persist() {
         try? persistence.save(projects)
-    }
-
-    private func seedDefaults() {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        projects = [
-            Project(
-                name: "helm",
-                directory: "\(home)/Desktop/amokorankye/dev/helm/helm",
-                services: [
-                    Service(name: "claude", command: "claude"),
-                    Service(name: "shell", command: "")
-                ]
-            )
-        ]
-        persist()
     }
 }

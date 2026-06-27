@@ -112,6 +112,7 @@ private struct ProjectInspector: View {
 private struct ServiceInspector: View {
     @EnvironmentObject private var store: ProjectStore
     @EnvironmentObject private var sessions: SessionManager
+    @EnvironmentObject private var supervisor: ProcessSupervisor
 
     let service: Service
     let project: Project
@@ -136,7 +137,17 @@ private struct ServiceInspector: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Button("Restart Session") {
-                            sessions.close(banner.key)
+                            // Real restart (grill m4): rebuild-in-place under the
+                            // same key with the CURRENT saved command/dir, so the
+                            // running session picks up the edits. Replaces the
+                            // Phase-2 close+reselect stub. Cancel any supervisor
+                            // backoff so a manual restart wins the race.
+                            supervisor.cancel(banner.key)
+                            sessions.rebuild(
+                                key: banner.key,
+                                command: service.command,
+                                workingDirectory: project.directory
+                            )
                         }
                     }
                 }
@@ -148,6 +159,11 @@ private struct ServiceInspector: View {
 
                 TextField("Command (empty = shell)", text: $draft.command)
                 Toggle("Auto-start with the app", isOn: $draft.autoStart)
+                Picker("Auto-restart", selection: $draft.restartPolicy) {
+                    ForEach(RestartPolicy.allCases) { policy in
+                        Text(policy.label).tag(policy)
+                    }
+                }
             }
 
             Section {
@@ -162,6 +178,7 @@ private struct ServiceInspector: View {
         draft.name != service.name
             || draft.command != service.command
             || draft.autoStart != service.autoStart
+            || draft.restartPolicy != service.restartPolicy
     }
 
     /// Drift detection: if a live session exists for this service and its spawned

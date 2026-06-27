@@ -7,6 +7,7 @@ struct ServiceDraft {
     var name: String = ""
     var command: String = ""
     var autoStart: Bool = false
+    var restartPolicy: RestartPolicy = .never
 
     init() {}
 
@@ -14,6 +15,7 @@ struct ServiceDraft {
         name = service.name
         command = service.command
         autoStart = service.autoStart
+        restartPolicy = service.restartPolicy
     }
 
     /// Name must be non-empty (trimmed). Command MAY be empty (= shell).
@@ -31,13 +33,15 @@ struct ServiceDraft {
         service.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         service.command = command.trimmingCharacters(in: .whitespacesAndNewlines)
         service.autoStart = autoStart
+        service.restartPolicy = restartPolicy
     }
 
     func makeService() -> Service {
         Service(
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             command: command.trimmingCharacters(in: .whitespacesAndNewlines),
-            autoStart: autoStart
+            autoStart: autoStart,
+            restartPolicy: restartPolicy
         )
     }
 }
