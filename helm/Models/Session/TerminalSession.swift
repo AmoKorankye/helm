@@ -25,8 +25,11 @@ final class TerminalSession: ObservableObject {
     /// supplies the authoritative exit code.
     @Published private(set) var lastExitProcessAlive: Bool?
 
-    private let command: String
-    private let workingDirectory: String
+    /// The command + cwd this session was spawned with. Non-private + read-only so
+    /// the inspector can diff live-vs-saved and offer a "restart to apply" when the
+    /// saved config drifts. ADDITIVE; exposes no GhosttyTerminal types.
+    let command: String
+    let workingDirectory: String
 
     init(key: SessionKey, command: String, workingDirectory: String) {
         self.key = key

@@ -1,0 +1,154 @@
+import Foundation
+import Combine
+
+/// The single source of truth for the project/service domain model. Renamed and
+/// grown out of the retired `AppStore`: persistence is delegated to
+/// `PersistenceStore`, and mutations return the `SessionKey`s of any sessions
+/// that must be torn down so the *caller* (ContentView) can coordinate with
+/// `SessionManager`.
+///
+/// Boundary (HANDOVER §9, decision 6): this file does NOT import GhosttyTerminal
+/// and does NOT know `SessionManager` exists. It only deals in pure value types
+/// (`SessionKey` is a GhosttyTerminal-free value type).
+@MainActor
+final class ProjectStore: ObservableObject {
+    @Published private(set) var projects: [Project] = []
+
+    private let persistence: PersistenceStore
+
+    init(persistence: PersistenceStore = PersistenceStore()) {
+        self.persistence = persistence
+        projects = (try? persistence.load()) ?? []
+        if projects.isEmpty {
+            seedDefaults()
+        }
+    }
+
+    // MARK: - Project mutations
+
+    func addProject(_ project: Project) {
+        var project = project
+        project.sortOrder = (projects.map(\.sortOrder).max() ?? -1) + 1
+        projects.append(project)
+        persist()
+    }
+
+    func updateProject(_ project: Project) {
+        guard let i = projects.firstIndex(where: { $0.id == project.id }) else { return }
+        projects[i] = project
+        persist()
+    }
+
+    /// Removes a project and reports the `SessionKey` of every service it
+    /// contained, so the caller can close any live terminals.
+    @discardableResult
+    func deleteProject(id: UUID) -> [SessionKey] {
+        guard let i = projects.firstIndex(where: { $0.id == id }) else { return [] }
+        let affected = projects[i].services.map { SessionKey(serviceID: $0.id) }
+        projects.remove(at: i)
+        persist()
+        return affected
+    }
+
+    func moveProjects(from offsets: IndexSet, to destination: Int) {
+        var ordered = projects.sorted { $0.sortOrder < $1.sortOrder }
+        Self.move(&ordered, fromOffsets: offsets, toOffset: destination)
+        for (idx, project) in ordered.enumerated() {
+            if let i = projects.firstIndex(where: { $0.id == project.id }) {
+                projects[i].sortOrder = idx
+            }
+        }
+        persist()
+    }
+
+    // MARK: - Service mutations
+
+    func addService(_ service: Service, to projectID: UUID) {
+        guard let i = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        var service = service
+        service.sortOrder = (projects[i].services.map(\.sortOrder).max() ?? -1) + 1
+        projects[i].services.append(service)
+        persist()
+    }
+
+    func updateService(_ service: Service, in projectID: UUID) {
+        guard let pi = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        guard let si = projects[pi].services.firstIndex(where: { $0.id == service.id }) else { return }
+        projects[pi].services[si] = service
+        persist()
+    }
+
+    @discardableResult
+    func deleteService(id serviceID: UUID, from projectID: UUID) -> [SessionKey] {
+        guard let pi = projects.firstIndex(where: { $0.id == projectID }) else { return [] }
+        guard let si = projects[pi].services.firstIndex(where: { $0.id == serviceID }) else { return [] }
+        projects[pi].services.remove(at: si)
+        persist()
+        return [SessionKey(serviceID: serviceID)]
+    }
+
+    func moveServices(in projectID: UUID, from offsets: IndexSet, to destination: Int) {
+        guard let pi = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        var ordered = projects[pi].services.sorted { $0.sortOrder < $1.sortOrder }
+        Self.move(&ordered, fromOffsets: offsets, toOffset: destination)
+        for idx in ordered.indices {
+            ordered[idx].sortOrder = idx
+        }
+        projects[pi].services = ordered
+        persist()
+    }
+
+    // MARK: - Lookups
+
+    func project(id: UUID?) -> Project? {
+        guard let id else { return nil }
+        return projects.first { $0.id == id }
+    }
+
+    func service(id: UUID?) -> (service: Service, project: Project)? {
+        guard let id else { return nil }
+        for project in projects {
+            if let service = project.services.first(where: { $0.id == id }) {
+                return (service, project)
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Internals
+
+    /// Foundation-only reimplementation of `Array.move(fromOffsets:toOffset:)`
+    /// so this store needn't import SwiftUI (keeps the model layer view-free).
+    /// Matches SwiftUI's semantics: `toOffset` is an index in the *original*
+    /// array (the position the moved block is inserted before).
+    private static func move<T>(_ array: inout [T], fromOffsets source: IndexSet, toOffset destination: Int) {
+        let moved = source.map { array[$0] }
+        // Remove from the back so earlier indices stay valid.
+        for index in source.sorted(by: >) {
+            array.remove(at: index)
+        }
+        // Adjust the insertion point for elements removed before it.
+        let removedBefore = source.filter { $0 < destination }.count
+        let insertAt = destination - removedBefore
+        array.insert(contentsOf: moved, at: insertAt)
+    }
+
+    private func persist() {
+        try? persistence.save(projects)
+    }
+
+    private func seedDefaults() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        projects = [
+            Project(
+                name: "helm",
+                directory: "\(home)/Desktop/amokorankye/dev/helm/helm",
+                services: [
+                    Service(name: "claude", command: "claude"),
+                    Service(name: "shell", command: "")
+                ]
+            )
+        ]
+        persist()
+    }
+}
