@@ -22,3 +22,8 @@ DerivedData/
 
 # Helm app data (local only)
 *.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Agent skills (mattpocock/skills — local-only, installed via `npx skills`)
+.agents/
+.claude/skills/
+skills-lock.json
