@@ -131,7 +131,8 @@ and `shell` services.
 | Phase | Scope | Status |
 |-------|-------|--------|
 | **1 — Foundation** | Xcode project, libghostty embedded, one working terminal, launch claude | ✅ Done |
-| **2 — Projects & Services** | Add/edit/delete projects & services in-app (currently seed-only), config UI | ⬜ Next |
+| **1.5 — Session decoupling** | Extract `SessionManager`/`TerminalSession`; retire `@StateObject`+`.id()` terminal ownership; AppKit host container so sessions survive switching. **Critical path — gates all later phases.** | ⬜ Next |
+| **2 — Projects & Services** | Add/edit/delete projects & services in-app (currently seed-only), config UI | ⬜ |
 | **3 — Process management** | Start/stop/restart, status indicators (running/stopped/crashed), auto-restart, log view | ⬜ |
 | **4 — Worktrees** | Auto-detect git worktrees, launch services per worktree | ⬜ |
 | **5 — Agent layer** | Parse Claude output for working/waiting state, show in sidebar, quick-launch presets | ⬜ |
@@ -142,17 +143,63 @@ Phases 1–3 = usable daily driver. 4–6 = better than Solo/Unpeel. 7 = beautif
 
 ---
 
-## 8. Immediate next steps (Phase 2)
+## 8. Immediate next steps (Phase 1.5 — must land before Phase 2)
 
-1. **Add-project / add-service UI** — sheets/forms (the `+` button in `SidebarView` is a
-   stub). Directory picker via `NSOpenPanel`. Persist through `AppStore`.
-2. **Edit & delete** for projects and services (context menus / swipe).
-3. **Polish the sidebar** — selection state, icons, maybe per-service status dot placeholder
-   (wired up for real in Phase 3).
+The Phase 1 terminal is owned by the SwiftUI view (`@StateObject` in `HelmTerminalPane` +
+`.id(service.id)` in `ContentView`), so **switching services destroys the PTY/process**.
+This blocks process management, worktrees, and always-on. Phase 1.5 decouples the
+terminal/process lifetime from the view lifetime. Then Phase 2 (CRUD) builds on the new seam.
+
+1. **`SessionManager`** (`@MainActor ObservableObject`) owns `[SessionKey: TerminalSession]`,
+   injected at app root. Detail pane calls `session(for:)` (create-or-return), never builds a
+   terminal itself.
+2. **`TerminalSession`** — reference type wrapping the long-lived `TerminalViewState` + Helm
+   metadata (key, status, startedAt, exit info). The library consumes state as
+   `@ObservedObject`, so an external owner is the intended pattern.
+3. **`SessionHostView`** (`NSViewRepresentable`) — retains all live surface `NSView`s and
+   toggles `isHidden` to show the selected one (card-stack), so GPU surface + scrollback +
+   focus survive a switch. Measure that hidden surfaces idle their Metal loop; LRU-evict to
+   `.detached` if not.
+4. Rewrite `ContentView`/`HelmTerminalPane` to consume the above; **delete the `.id()`**.
+5. **Verify:** launch `claude`, switch to another service and back — the session must still be
+   running (not a fresh shell).
+
+Then Phase 2: add/edit/delete project & service via sheets + inspector, `NSOpenPanel` picker,
+validation in a draft model.
 
 ---
 
-## 9. How to build/run
+## 9. Architecture decisions (Phases 1.5–6) — settled 2026-06-27
+
+Decided via a grilling session + Software/Backend Architect review (both read libghostty 1.3.1
+source). Constraints honored: battery is the #1 hard constraint (→ zero-poll everywhere),
+macOS-only, sandbox off, Rust only if a non-Swift layer is truly needed.
+
+**Validated crux:** `TerminalSurfaceView` takes its state as `@ObservedObject`, not
+`@StateObject`. The library *wants* an external owner. Today's `@StateObject` + `.id()` is
+fighting it and tearing down PTYs on every service switch.
+
+| # | Decision |
+|---|----------|
+| 1 | **Phase 1.5 decoupling lands before Phase 2** — CRUD redefines selection/identity; building it on the PTY-killing model means writing it twice. Critical path. |
+| 2 | **`SessionManager` owns sessions**, injected at root; detail pane only *displays* a manager-owned `TerminalSession`. Sessions die only on explicit close/stop. |
+| 3 | **Offscreen survival via AppKit host container** retaining surfaces with `isHidden` (card-stack). |
+| 4 | **Composite `SessionKey`** = `serviceID` + instance token (`.primary` now; `.worktree(branch)` Phase 4). Tmux-safe slug `helm-<project>-<service>[-<worktree>]`. Makes Phase 4 additive, not a rewrite. |
+| 5 | **Domain model stays Codable+JSON, grown additively** (all new fields defaulted): `environment`, `shell?` (nil = global `zsh -lic` default), `sortOrder`, `icon`, `colorHex`, `restartPolicy`, `persistent`, `worktreeEnabled`. Runtime state (status/pid/exit/agent-state) is **never persisted** — lives on `TerminalSession`. |
+| 6 | **Six deep modules:** `SessionManager`, `TerminalSession`, `ProcessSupervisor` (Ph3 — *decides* restart, doesn't spawn), `PersistenceStore` (split out of `AppStore`), `WorktreeService` (Ph4), `AgentStateDetector` (Ph5). **All libghostty coupling sealed behind SessionManager/TerminalSession** — no other file imports `GhosttyTerminal`. |
+| 7 | **Status is zero-poll** — `enum SessionStatus { starting, running, exited(code), crashed(code), detached }` driven by **kqueue `EVFILT_PROC`/`NOTE_EXIT` on the PTY child pid** + `waitpid` for the code. No timers, no read loops, no `git status` polling. |
+| 8 | **libghostty pid:** 1.3.1 does **not** expose the child pid, and its `COMMAND_FINISHED` exit path is OSC/shell-integration-driven (won't fire for `claude` via `zsh -lic`); `SHOW_CHILD_EXITED` is unbridged. → **Carry a small C-shim/patch to libghostty-spm** to expose the child pid + bridge `SHOW_CHILD_EXITED`. (Phase 3.) |
+| 9 | **On process exit:** show a **Helm restart affordance** (overlay + one-click restart), matching the service-dashboard model. |
+| 10 | **Shell config:** **global default (`zsh -lic`) + per-service env vars**; `shell?` field present-but-defaulted for the rare override. |
+| 11 | **Phase 2 CRUD:** modal **sheets** to create, **inspector** to edit, `NSOpenPanel` dir picker behind a helper, validation in a draft/form model (Views stay dumb). |
+| 12 | **Rust scope:** Phases 2–5 are **pure Swift** (libghostty already owns PTY/spawn/cwd/env). Rust is a **deferred Phase 6+ contingency** only — a tiny *observer* status-sidecar (Unix socket + length-prefixed JSON), never the PTY owner. |
+| 13 | **Phase 6 persistence = tmux-first** (Mori model): `tmux new-session -A -s helm-<key>` for idempotent attach/reattach; status via control-mode (`-CC`); logs via `pipe-pane` → file + `EVFILT_VNODE` tail. Accept a `brew install tmux` dependency w/ graceful degradation (tmux is **not** currently installed). Rust daemon only if a tmux spike fails. **Persistence is opt-in per service.** |
+
+**Corrected build order:** `1.5 → 2 → 3 (+pid patch) → 4 → 5 → 6 (tmux)`.
+
+---
+
+## 10. How to build/run
 
 - Open `helm/helm/helm.xcodeproj` in **Xcode** (full Xcode required, not just CLT;
   `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`).

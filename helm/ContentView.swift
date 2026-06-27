@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var store = AppStore()
+    @EnvironmentObject private var sessions: SessionManager
     @State private var selectedProject: Project?
     @State private var selectedService: Service?
 
@@ -14,8 +15,14 @@ struct ContentView: View {
             .environmentObject(store)
         } detail: {
             if let project = selectedProject, let service = selectedService {
-                HelmTerminalPane(project: project, service: service)
-                    .id(service.id)
+                // Create-or-return the long-lived session, then host it. The
+                // session (and its PTY/process) outlives this view, so switching
+                // services no longer tears it down. No `.id()`.
+                let _ = sessions.session(for: service, in: project)
+                SessionHostView(
+                    manager: sessions,
+                    selectedKey: SessionKey(serviceID: service.id, instance: .primary)
+                )
             } else {
                 WelcomeView()
             }
