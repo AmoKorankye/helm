@@ -61,7 +61,11 @@ struct WorktreeService {
             // string-match stderr; exit 128 is the typical not-a-repo case.
             let stderr = String(data: errData, encoding: .utf8) ?? ""
             #if DEBUG
-            if !stderr.isEmpty {
+            // A non-git project is the EXPECTED graceful-degradation path (exit 128
+            // + "not a git repository"), not an error — don't spam the console for it.
+            // Only log genuinely unexpected non-zero exits.
+            let isExpectedNonRepo = stderr.localizedCaseInsensitiveContains("not a git repository")
+            if !stderr.isEmpty, !isExpectedNonRepo {
                 NSLog("[WorktreeService] git exit \(process.terminationStatus) for \(directory): \(stderr)")
             }
             #endif

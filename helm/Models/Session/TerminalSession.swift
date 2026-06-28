@@ -255,9 +255,19 @@ final class TerminalSession: ObservableObject {
     /// `surfaceSize` publishes on first resize/attach. Zero-poll: a Combine sink,
     /// not a timer.
     private func observeSurfaceAttach() {
+        // `$surfaceSize` first publishes during the surface attach/resize, which
+        // happens INSIDE `SessionHostView.updateNSView` (a SwiftUI view update).
+        // Setting the observed `@Published status` there triggers the "Publishing
+        // changes from within view updates" warning. `.receive(on:)` hops the status
+        // flip to the next runloop tick — out of the view update. Still event-driven
+        // (fires only on first surface size), not a poll; the `.starting`/`.detached`
+        // guards are re-checked on the deferred tick so a status that already turned
+        // terminal in between (e.g. an immediate close) is never overwritten back to
+        // `.running`.
         viewState.$surfaceSize
             .compactMap { $0 }
             .first()
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
                 switch self.status {

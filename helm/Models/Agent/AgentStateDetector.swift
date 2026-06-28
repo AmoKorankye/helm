@@ -57,7 +57,13 @@ final class AgentStateDetector: ObservableObject {
         recompute()
     }
 
-    /// Called by the forwarding delegate (§6) when OSC 9;4 progress arrives.
+    /// Called by the forwarding delegate (§6) when OSC 9;4 progress arrives. The
+    /// delegate fires this while libghostty parses bytes, which can happen during a
+    /// SwiftUI view update on attach. The `progressActive` latch is updated
+    /// SYNCHRONOUSLY (so no progress event is lost or reordered), but the resulting
+    /// `recompute()` — which mutates the observed `@Published agentState` — is hopped
+    /// to the next runloop tick so it never runs inside a view update. Event-driven,
+    /// not a poll; one-tick delay only.
     func progressDidReport(state: TerminalProgressState, percent: Int?) {
         switch state {
         case .set, .indeterminate:
@@ -65,7 +71,7 @@ final class AgentStateDetector: ObservableObject {
         case .remove, .error, .pause:
             progressActive = false
         }
-        recompute()
+        DispatchQueue.main.async { [weak self] in self?.recompute() }
     }
 
     /// M2 — explicit clear-on-select hook (sidebar row tap, §5.10). Drops the
@@ -86,7 +92,18 @@ final class AgentStateDetector: ObservableObject {
         let notif = viewState.$lastDesktopNotificationAt.map { _ in () }
         let focus = viewState.$isFocused.map { _ in () }
 
+        // `.receive(on: DispatchQueue.main)`: these four libghostty signals can fire
+        // SYNCHRONOUSLY while a SwiftUI view update is hosting the surface (title /
+        // focus set during `updateNSView` on attach). Recomputing — and thus mutating
+        // the observed `@Published agentState` — inside that update triggers SwiftUI's
+        // "Publishing changes from within view updates" warning. Hopping to the next
+        // runloop tick moves `recompute()` OUT of the view-update cycle. This is NOT a
+        // poll: it stays purely event-driven (only fires when a signal fires), just
+        // delivered one tick later. The attention latch is timestamp-compared
+        // (`updateAttentionLatch`), so a one-tick delay does not lose or reorder a
+        // bell/notif ping.
         Publishers.Merge4(title, bell, notif, focus)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.recompute() }
             .store(in: &cancellables)
     }
