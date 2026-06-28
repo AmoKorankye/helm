@@ -6,78 +6,84 @@ struct ContentView: View {
     @EnvironmentObject private var worktrees: WorktreeStore
     @EnvironmentObject private var supervisor: ProcessSupervisor
 
-    // Selection is by ID, not by value: the model can mutate (rename, reorder)
-    // without invalidating the selection, and it survives a store reload.
+    @Environment(\.colorScheme) private var colorScheme
+
     @State private var selectedProjectID: UUID?
     @State private var selectedServiceID: UUID?
-    // Phase 4: a service can now have N concurrent sessions (one per worktree), so
-    // selection must carry WHICH instance is shown in the detail pane.
     @State private var selectedInstance: SessionInstance = .primary
 
-    // Sheet / inspector presentation.
     @State private var showAddProject = false
     @State private var addServiceTargetProjectID: UUID?
-    @State private var showInspector = false
+    @State private var sidebarVisible = true
+    @State private var sidebarWidth: CGFloat = 220
+
+    private static let sidebarMinWidth: CGFloat = 160
+    private static let sidebarMaxWidth: CGFloat = 400
 
     var body: some View {
-        NavigationSplitView {
-            SidebarView(
-                selectedProjectID: $selectedProjectID,
-                selectedServiceID: $selectedServiceID,
-                selectedInstance: $selectedInstance,
-                onAddProject: { showAddProject = true },
-                onAddService: { addServiceTargetProjectID = $0 },
-                onDeleteService: { serviceID, projectID in
-                    deleteService(id: serviceID, in: projectID)
-                },
-                onDeleteProject: { deleteProject(id: $0) },
-                onStartService: { service, project, instance in
-                    startService(service, in: project, instance: instance)
-                },
-                onStopService: { service, instance in
-                    stopService(service, instance: instance)
-                },
-                onRestartService: { service, project, instance in
-                    restartService(service, in: project, instance: instance)
-                },
-                onLaunchPreset: { preset in
-                    launchPreset(preset)
-                }
-            )
-        } detail: {
+        HStack(spacing: 0) {
+            if sidebarVisible {
+                SidebarView(
+                    selectedProjectID: $selectedProjectID,
+                    selectedServiceID: $selectedServiceID,
+                    selectedInstance: $selectedInstance,
+                    onAddProject: { showAddProject = true },
+                    onAddService: { addServiceTargetProjectID = $0 },
+                    onDeleteService: { serviceID, projectID in
+                        deleteService(id: serviceID, in: projectID)
+                    },
+                    onDeleteProject: { deleteProject(id: $0) },
+                    onStartService: { service, project, instance in
+                        startService(service, in: project, instance: instance)
+                    },
+                    onStopService: { service, instance in
+                        stopService(service, instance: instance)
+                    },
+                    onRestartService: { service, project, instance in
+                        restartService(service, in: project, instance: instance)
+                    },
+                    onLaunchPreset: { launchPreset($0) }
+                )
+                .frame(width: sidebarWidth, alignment: .top)
+                .frame(maxHeight: .infinity, alignment: .top)
+            }
+
             detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Fill up to the window top — the toolbar reserves a title-bar
+                // safe area that would otherwise leave dead space above the
+                // terminal (the sidebar already ignores it via its background).
+                .ignoresSafeArea(edges: .top)
         }
         .frame(minWidth: 900, minHeight: 600)
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    showInspector.toggle()
-                } label: {
-                    Image(systemName: "sidebar.trailing")
-                }
-                .help("Toggle inspector")
+        .background(colorScheme == .dark ? Color(white: 0.07) : Color.white)
+        // The resize handle lives in an overlay straddling the sidebar/detail
+        // seam, so it adds NO layout width — the two panes sit flush together.
+        .overlay(alignment: .leading) {
+            if sidebarVisible {
+                SidebarDivider(sidebarWidth: $sidebarWidth,
+                               min: Self.sidebarMinWidth,
+                               max: Self.sidebarMaxWidth)
+                    .frame(maxHeight: .infinity)
+                    .offset(x: sidebarWidth - 8)
             }
         }
-        .inspector(isPresented: $showInspector) {
-            InspectorView(
-                selectedProjectID: selectedProjectID,
-                selectedServiceID: selectedServiceID,
-                selectedInstance: selectedInstance
-            )
-            .inspectorColumnWidth(min: 260, ideal: 300, max: 420)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { sidebarVisible.toggle() }
+                } label: {
+                    Image(systemName: "sidebar.left").font(.system(size: 13))
+                }
+                .help("Toggle sidebar")
+            }
         }
         .sheet(isPresented: $showAddProject) {
-            AddProjectSheet { newProject in
-                store.addProject(newProject)
-            }
+            AddProjectSheet { store.addProject($0) }
         }
         .sheet(item: addServiceSheetItem) { item in
-            AddServiceSheet(projectID: item.projectID) { newService in
-                store.addService(newService, to: item.projectID)
-            }
+            AddServiceSheet(projectID: item.projectID) { store.addService($0, to: item.projectID) }
         }
-        // Zero-poll worktree refresh: re-scan ONLY when the selected project
-        // changes (the §3 selection trigger). No interval timer ever scans git.
         .task(id: selectedProjectID) {
             guard let project = store.project(id: selectedProjectID) else { return }
             await worktrees.refresh(project)
@@ -106,14 +112,18 @@ struct ContentView: View {
         )
     }
 
-    @ViewBuilder
     private var detail: some View {
-        if let d = detailSelection {
-            // Non-mutating lookup ONLY (no create in body — that's `ensureSession`,
-            // a side effect below). The session and its PTY/process outlive this
-            // view, so switching services never tears it down. No `.id()`.
-            if let session = sessions.session(for: d.key) {
-                VStack(spacing: 0) {
+        // A single view (the Group), so the detail area fills the full leftover
+        // width. The create-or-return runs from `.task` on this same view — still a
+        // SIDE EFFECT outside the body update (so publishing the new session is
+        // allowed), NOT a second sibling view that would claim its own column.
+        Group {
+            if let d = detailSelection {
+                // Non-mutating lookup ONLY (no create in body — that's
+                // `ensureSession`, the `.task` side effect). The session and its
+                // PTY/process outlive this view, so switching services never tears
+                // it down. No `.id()`.
+                if let session = sessions.session(for: d.key) {
                     SessionHostView(manager: sessions, selectedKey: d.key)
                         .overlay {
                             RestartOverlay(session: session) {
@@ -124,24 +134,20 @@ struct ContentView: View {
                                 )
                             }
                         }
-                    LogPanelView(session: session)
+                } else {
+                    // Brief (~1 frame) placeholder the first time a given session is
+                    // created: `ensureSession` creates it as a side effect, then the
+                    // republish re-renders here. An already-created session renders
+                    // immediately (no flicker on switch).
+                    Color(colorScheme == .dark ? NSColor(white: 0.07, alpha: 1) : .white)
                 }
             } else {
-                // Brief (~1 frame) placeholder the first time a given session is
-                // created: `ensureSession` (the `.task` below) creates it as a side
-                // effect, then the republish re-renders into the VStack above. An
-                // already-created session renders immediately (no flicker on switch).
-                Color(nsColor: .windowBackgroundColor)
+                WelcomeView()
             }
-        } else {
-            WelcomeView()
         }
-        // Create-or-return + reattach as a SIDE EFFECT (outside the body update, so
-        // publishing the new session here is allowed). Re-runs whenever the
+        // Create-or-return + reattach as a SIDE EFFECT. Re-runs whenever the
         // selection key changes — lazy attach builds the surface on first selection.
-        Color.clear
-            .frame(width: 0, height: 0)
-            .task(id: detailSelection?.key) { ensureSession() }
+        .task(id: detailSelection?.key) { ensureSession() }
     }
 
     /// Create-or-return the long-lived session for the current selection, then
@@ -341,20 +347,84 @@ private struct AddServiceTarget: Identifiable {
     var id: UUID { projectID }
 }
 
+// MARK: - SidebarDivider
+
+private struct SidebarDivider: View {
+    @Binding var sidebarWidth: CGFloat
+    let min: CGFloat
+    let max: CGFloat
+
+    @State private var isHovering  = false
+    @State private var isDragging  = false
+    @State private var dragStartWidth: CGFloat?
+    // Tracks how many times we've pushed so we can always balance the stack.
+    @State private var cursorDepth = 0
+
+    var body: some View {
+        Color.white.opacity(0.001)  // invisible but hittable; no visible line
+            .frame(width: 8)
+            .contentShape(Rectangle())
+            .ignoresSafeArea(.all, edges: .top)
+        .onHover { hovering in
+            isHovering = hovering
+            // During a drag the cursor is already up; ignore hover changes
+            // so we don't mis-count pushes.
+            guard !isDragging else { return }
+            if hovering { pushCursor() } else { popAllCursors() }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    if !isDragging {
+                        isDragging = true
+                        dragStartWidth = sidebarWidth
+                        // If onHover didn't already push (e.g. fast click at the edge),
+                        // push now so the resize cursor stays for the whole drag.
+                        if cursorDepth == 0 { pushCursor() }
+                    }
+                    let proposed = (dragStartWidth ?? sidebarWidth) + value.translation.width
+                    sidebarWidth = Swift.min(Swift.max(proposed, min), max)
+                }
+                .onEnded { _ in
+                    isDragging = false
+                    dragStartWidth = nil
+                    // Balance the stack completely, then re-push if still hovering.
+                    popAllCursors()
+                    if isHovering { pushCursor() }
+                }
+        )
+        // The sidebar can be toggled off (or this view torn down) mid-hover/drag,
+        // so onHover(false) never fires — always balance the cursor stack here.
+        .onDisappear { popAllCursors() }
+    }
+
+    private func pushCursor() {
+        NSCursor.resizeLeftRight.push()
+        cursorDepth += 1
+    }
+
+    private func popAllCursors() {
+        for _ in 0..<cursorDepth { NSCursor.pop() }
+        cursorDepth = 0
+    }
+}
+
 struct WelcomeView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "terminal.fill")
                 .font(.system(size: 48, weight: .light))
                 .foregroundStyle(.tertiary)
             Text("Select a service")
-                .font(.title2)
+                .font(HelmFont.ui)
                 .foregroundStyle(.secondary)
             Text("Choose a project and service from the sidebar")
-                .font(.subheadline)
+                .font(HelmFont.mono)
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(colorScheme == .dark ? Color(white: 0.07) : .white)
     }
 }

@@ -11,43 +11,6 @@
 		E03614442FEFED3400206C29 /* GhosttyTheme in Frameworks */ = {isa = PBXBuildFile; productRef = E03614432FEFED3400206C29 /* GhosttyTheme */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXFileReference section */
-		E03614252FEFE18200206C29 /* helm.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = helm.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		ABCDEF0000000000000000T3 /* helmTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = helmTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-/* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		E03614272FEFE18200206C29 /* helm */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = helm;
-			sourceTree = "<group>";
-		};
-		ABCDEF0000000000000000T1 /* helmTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = helmTests;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		E03614222FEFE18200206C29 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				E03614422FEFED3000206C29 /* GhosttyTerminal in Frameworks */,
-				E03614442FEFED3400206C29 /* GhosttyTheme in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		ABCDEF0000000000000000T5 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
-
 /* Begin PBXContainerItemProxy section */
 		ABCDEF0000000000000000TB /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -58,13 +21,42 @@
 		};
 /* End PBXContainerItemProxy section */
 
-/* Begin PBXTargetDependency section */
-		ABCDEF0000000000000000TA /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = E03614242FEFE18200206C29 /* helm */;
-			targetProxy = ABCDEF0000000000000000TB /* PBXContainerItemProxy */;
+/* Begin PBXFileReference section */
+		ABCDEF0000000000000000T3 /* helmTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = helmTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E03614252FEFE18200206C29 /* helm.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = helm.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		ABCDEF0000000000000000T1 /* helmTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = helmTests;
+			sourceTree = "<group>";
 		};
-/* End PBXTargetDependency section */
+		E03614272FEFE18200206C29 /* helm */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = helm;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		ABCDEF0000000000000000T5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E03614222FEFE18200206C29 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E03614422FEFED3000206C29 /* GhosttyTerminal in Frameworks */,
+				E03614442FEFED3400206C29 /* GhosttyTheme in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		E036141C2FEFE18200206C29 = {
@@ -96,6 +88,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		ABCDEF0000000000000000T2 /* helmTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = ABCDEF0000000000000000T9 /* Build configuration list for PBXNativeTarget "helmTests" */;
+			buildPhases = (
+				ABCDEF0000000000000000T4 /* Sources */,
+				ABCDEF0000000000000000T5 /* Frameworks */,
+				ABCDEF0000000000000000T6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				ABCDEF0000000000000000TA /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				ABCDEF0000000000000000T1 /* helmTests */,
+			);
+			name = helmTests;
+			packageProductDependencies = (
+			);
+			productName = helmTests;
+			productReference = ABCDEF0000000000000000T3 /* helmTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		E03614242FEFE18200206C29 /* helm */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = E03614302FEFE18400206C29 /* Build configuration list for PBXNativeTarget "helm" */;
@@ -120,29 +135,6 @@
 			productReference = E03614252FEFE18200206C29 /* helm.app */;
 			productType = "com.apple.product-type.application";
 		};
-		ABCDEF0000000000000000T2 /* helmTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = ABCDEF0000000000000000T9 /* Build configuration list for PBXNativeTarget "helmTests" */;
-			buildPhases = (
-				ABCDEF0000000000000000T4 /* Sources */,
-				ABCDEF0000000000000000T5 /* Frameworks */,
-				ABCDEF0000000000000000T6 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				ABCDEF0000000000000000TA /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				ABCDEF0000000000000000T1 /* helmTests */,
-			);
-			name = helmTests;
-			packageProductDependencies = (
-			);
-			productName = helmTests;
-			productReference = ABCDEF0000000000000000T3 /* helmTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -153,12 +145,12 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
-					E03614242FEFE18200206C29 = {
-						CreatedOnToolsVersion = 26.6;
-					};
 					ABCDEF0000000000000000T2 = {
 						CreatedOnToolsVersion = 26.6;
 						TestTargetID = E03614242FEFE18200206C29;
+					};
+					E03614242FEFE18200206C29 = {
+						CreatedOnToolsVersion = 26.6;
 					};
 				};
 			};
@@ -186,14 +178,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		E03614232FEFE18200206C29 /* Resources */ = {
+		ABCDEF0000000000000000T6 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		ABCDEF0000000000000000T6 /* Resources */ = {
+		E03614232FEFE18200206C29 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -203,14 +195,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		E03614212FEFE18200206C29 /* Sources */ = {
+		ABCDEF0000000000000000T4 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		ABCDEF0000000000000000T4 /* Sources */ = {
+		E03614212FEFE18200206C29 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -219,7 +211,59 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		ABCDEF0000000000000000TA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E03614242FEFE18200206C29 /* helm */;
+			targetProxy = ABCDEF0000000000000000TB /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		ABCDEF0000000000000000T7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.3;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.amokorankye.helmTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/helm.app/Contents/MacOS/helm";
+			};
+			name = Debug;
+		};
+		ABCDEF0000000000000000T8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.3;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.amokorankye.helmTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/helm.app/Contents/MacOS/helm";
+			};
+			name = Release;
+		};
 		E036142E2FEFE18400206C29 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -398,53 +442,18 @@
 			};
 			name = Release;
 		};
-		ABCDEF0000000000000000T7 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.3;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.amokorankye.helmTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/helm.app/Contents/MacOS/helm";
-			};
-			name = Debug;
-		};
-		ABCDEF0000000000000000T8 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.3;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.amokorankye.helmTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/helm.app/Contents/MacOS/helm";
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		ABCDEF0000000000000000T9 /* Build configuration list for PBXNativeTarget "helmTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ABCDEF0000000000000000T7 /* Debug */,
+				ABCDEF0000000000000000T8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		E03614202FEFE18200206C29 /* Build configuration list for PBXProject "helm" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -459,15 +468,6 @@
 			buildConfigurations = (
 				E03614312FEFE18400206C29 /* Debug */,
 				E03614322FEFE18400206C29 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		ABCDEF0000000000000000T9 /* Build configuration list for PBXNativeTarget "helmTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				ABCDEF0000000000000000T7 /* Debug */,
-				ABCDEF0000000000000000T8 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
