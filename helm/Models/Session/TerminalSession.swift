@@ -69,6 +69,16 @@ final class TerminalSession: ObservableObject {
     private(set) var command: String
     private(set) var workingDirectory: String
 
+    /// Phase 6: this session runs under tmux (`-L helm`) so its process survives
+    /// app close. Drives the close-handler branch (detach vs exit), kill-first
+    /// Stop, and the log panel. Non-persistent sessions never touch `TmuxService`.
+    let persistent: Bool
+    /// The tmux service used for persistent lifecycle queries (liveness/kill). nil
+    /// for non-persistent sessions (they never call tmux).
+    private let tmux: TmuxService?
+    /// This session's tmux session name (slug), used for every persistent query.
+    var slug: String { key.slug }
+
     private var cancellables: Set<AnyCancellable> = []
     /// User-Stop intent: set before tearing down the surface so the resulting
     /// `terminalDidClose` (if it fires after) is classified as a clean user stop,
@@ -81,18 +91,47 @@ final class TerminalSession: ObservableObject {
     /// republish to the supervisor. Carries the final `status`.
     let didExit = PassthroughSubject<SessionStatus, Never>()
 
-    init(key: SessionKey, command: String, workingDirectory: String, isAgent: Bool = false) {
+    /// Republished from the detector's `attentionPing` (m4): a fresh bell/notif on
+    /// a NON-PERSISTENT agent. `AttentionNotifier` posts a banner from this while
+    /// the app is away. Persistent agents can't deliver OSC under tmux (B3), so
+    /// this only fires for non-persistent sessions.
+    let attentionPing = PassthroughSubject<Void, Never>()
+
+    /// Restore-as-detached seed (Phase 6 reattach): when non-nil the session is
+    /// constructed straight into this status (no surface attach) instead of
+    /// `.starting`. Used by `restoreDetached` (`.detached`) and `restoreTerminal`
+    /// (dead-pane `.exited`/`.crashed`).
+    init(key: SessionKey,
+         command: String,
+         workingDirectory: String,
+         isAgent: Bool = false,
+         persistent: Bool = false,
+         tmux: TmuxService? = nil,
+         confPath: String? = nil,
+         restoreStatus: SessionStatus? = nil) {
         self.key = key
         self.command = command
         self.workingDirectory = workingDirectory
         self.startedAt = Date()
         self.isAgent = isAgent
+        self.persistent = persistent
+        self.tmux = persistent ? tmux : nil
 
-        // --- Config logic moved verbatim from the retired HelmTerminalPane ---
-        // KEEP the Phase-1 `.exec` path exactly (Strategy E): ghostty owns the
-        // PTY/spawn/reap; we only observe its lifecycle (HANDOVER §6.2, §6.3).
+        // --- Config logic ---
+        // Non-persistent: KEEP the Phase-1 `.exec` path exactly (Strategy E′) —
+        // tmux is NEVER invoked, byte-for-byte the current command construction.
+        // Persistent: ghostty execs `/bin/zsh -lc "<launcher>"`, the tmux launcher
+        // (B1, three quote layers) built by `TmuxService.attachCommand`.
         var config = TerminalConfiguration()
-        if !command.isEmpty {
+        if persistent, let tmux, let confPath {
+            let launcher = tmux.attachCommand(
+                slug: key.slug,
+                innerCommand: command,
+                workingDirectory: workingDirectory,
+                confPath: confPath
+            )
+            config = config.custom("command", launcher)
+        } else if !command.isEmpty {
             let wrapped = "/bin/zsh -lic \"\(command)\""
             config = config.custom("command", wrapped)
         }
@@ -104,6 +143,9 @@ final class TerminalSession: ObservableObject {
         )
         state.configuration = TerminalSurfaceOptions(workingDirectory: workingDirectory)
         self.viewState = state
+        if let restoreStatus {
+            self.status = restoreStatus
+        }
 
         // Agent layer (Phase 5). Only agent sessions get a detector; the forwarding
         // delegate is used uniformly (progress just no-ops when detector == nil), so
@@ -120,6 +162,9 @@ final class TerminalSession: ObservableObject {
         if let detector {
             detector.$agentState
                 .sink { [weak self] in self?.agentState = $0 }
+                .store(in: &cancellables)
+            detector.attentionPing
+                .sink { [weak self] in self?.attentionPing.send() }
                 .store(in: &cancellables)
         }
     }
@@ -145,9 +190,64 @@ final class TerminalSession: ObservableObject {
         viewState.onClose = { [weak self] processAlive in
             Task { @MainActor in
                 guard let self else { return }
-                guard !processAlive else { return }   // child still alive → stay running.
-                self.endSession(byUser: self.stopRequestedByUser)
+                if self.persistent {
+                    // §3.1 source 2: for a persistent session, surface close means
+                    // the ATTACH CLIENT died — usually a DETACH (process survives),
+                    // unless a user Stop already handled it or the pane is dead.
+                    self.resolvePersistentClose()
+                } else {
+                    // EXISTING Phase-3 path, byte-identical.
+                    guard !processAlive else { return }   // child still alive → stay running.
+                    self.endSession(byUser: self.stopRequestedByUser)
+                }
             }
+        }
+    }
+
+    /// Persistent surface-close reconciliation (§3.1 source 2). A user Stop already
+    /// set the terminal status (and `stopRequestedByUser`), so we only act when the
+    /// session is still live. Query tmux ONCE to discriminate detach vs already-
+    /// dead (the B4 hook may have raced ahead): `.alive` → `.detached`; `.paneDead`
+    /// → exit/crash; `.gone` → exited.
+    private func resolvePersistentClose() {
+        guard !hasEmittedExit else { return }
+        switch status {
+        case .running, .starting, .detached:
+            break
+        default:
+            return   // already terminal (user Stop / death already ingested).
+        }
+        let live = tmux?.sessionLiveness(slug: slug) ?? .gone
+        switch live {
+        case .alive:
+            // Detach is NOT an exit — it is never emitted to the supervisor, so a
+            // restart policy never fires on a mere detach (§3.3).
+            status = .detached
+        case let .paneDead(code):
+            applyDeath(code: code)
+        case .gone:
+            // Session vanished without a death marker — treat as a neutral exit.
+            endSession(byUser: stopRequestedByUser)
+        }
+    }
+
+    /// Apply a server-side death (from the B4 deaths.log hook or a liveness query)
+    /// to this persistent session's status, exactly once. code 0 → neutral exit;
+    /// non-zero → crash (red dot). Emits the exit event to the supervisor.
+    func applyDeath(code: Int32) {
+        guard !hasEmittedExit else { return }
+        switch status {
+        case .running, .starting, .detached:
+            hasEmittedExit = true
+            if code == 0 {
+                status = .exited(code: 0, byUser: false)
+            } else {
+                status = .crashed(reason: .exited(code: code))
+            }
+            detector?.sessionTerminated()
+            didExit.send(status)
+        default:
+            break
         }
     }
 
@@ -160,8 +260,16 @@ final class TerminalSession: ObservableObject {
             .first()
             .sink { [weak self] _ in
                 guard let self else { return }
-                if case .starting = self.status {
+                switch self.status {
+                case .starting:
                     self.status = .running
+                case .detached:
+                    // Persistent reattach: the surface re-attached to a live tmux
+                    // session → back to running. (Reattach only builds a surface
+                    // when liveness was .alive, M2, so this never lights a corpse.)
+                    self.status = .running
+                default:
+                    break
                 }
             }
             .store(in: &cancellables)
@@ -193,11 +301,45 @@ final class TerminalSession: ObservableObject {
     /// KEPT in the manager's dict in `.exited(byUser:true)` so create-or-return
     /// does not respawn it; the RestartOverlay covers the now-empty surface area.
     func stop() {
+        if persistent {
+            stopPersistent()
+            return
+        }
         stopRequestedByUser = true
         hasEmittedExit = true          // suppress any late onClose double-emit.
         status = .exited(code: nil, byUser: true)
         detector?.sessionTerminated()  // M3: latch .done on the user-stop path too.
         surfaceShouldClose = true      // host frees the surface → child SIGHUP.
+    }
+
+    /// Persistent Stop (M4): kill the tmux session and VERIFY it is gone FIRST,
+    /// THEN free the surface and flip status to `.exited(byUser:true)`. We do NOT
+    /// claim `.exited` until the kill is confirmed — if the kill fails (including a
+    /// hung/slow tmux that misses the timeout) the session stays live so the dot
+    /// keeps telling the truth, and we log it. The kill runs off-main on a GCD
+    /// queue (mirrors WorktreeService); the status flip hops back to the main actor.
+    private func stopPersistent() {
+        stopRequestedByUser = true
+        let tmux = self.tmux
+        let slug = self.slug
+        DispatchQueue.global(qos: .userInitiated).async {
+            let killed = tmux?.killSession(slug: slug) ?? false
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                guard killed else {
+                    #if DEBUG
+                    NSLog("[TerminalSession] persistent Stop: kill-session failed for \(slug); leaving session live")
+                    #endif
+                    return
+                }
+                guard !self.hasEmittedExit else { return }
+                self.hasEmittedExit = true
+                self.status = .exited(code: nil, byUser: true)
+                self.detector?.sessionTerminated()
+                self.surfaceShouldClose = true   // free the (now dead-server) surface.
+                self.didExit.send(self.status)
+            }
+        }
     }
 
     /// Tear down this session before it is dropped (close/rebuild). With the

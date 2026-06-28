@@ -10,6 +10,8 @@ struct AddServiceSheet: View {
     @State private var draft = ServiceDraft()
     @State private var errors: [ValidationError] = []
 
+    private var tmuxAvailable: Bool { TmuxService().isAvailable }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("New Service")
@@ -33,6 +35,13 @@ struct AddServiceSheet: View {
 
             Toggle("Auto-start with the app", isOn: $draft.autoStart)
             Toggle("Run per git worktree", isOn: $draft.worktreeEnabled)
+            Toggle("Persistent (survives app close)", isOn: $draft.persistent)
+                .disabled(!tmuxAvailable)
+            if !tmuxAvailable {
+                Text("Requires tmux — `brew install tmux`.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
 
             HStack {
                 Spacer()

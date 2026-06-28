@@ -145,10 +145,15 @@ and `shell` services.
 | **3 — Process management** | Per-service start/stop/restart (hover controls), status dots, auto-restart. **Strategy E′: status from ghostty `terminalDidClose`; Stop = surface teardown.** Per-service controls replaced the top toolbar; seeded project removed. (Log panel deferred.) | ✅ Done |
 | **4 — Worktrees** | Auto-detect git worktrees (`WorktreeService`), run a service per worktree (sidebar `DisclosureGroup`); one service → N `SessionKey(.worktree(branch:))` sessions; detached keyed by path-hash; prunable/bare excluded; derived-not-persisted (only `worktreeEnabled`). | ✅ Done |
 | **5 — Agent layer** | Agent-state badge in sidebar + quick-launch presets. **Reality check (Strategy E′ = no byte stream):** "parse Claude output" isn't possible; instead state from ghostty signals — reliable **attention** (bell/notif while unfocused), **done** (exit), **working** (OSC 9;4 progress via a forwarding-delegate shim, if the agent emits it); title heuristic disabled by default. Presets = real ephemeral Services (add+launch), not `.adHoc`. `AgentStateDetector`/`SessionSurfaceDelegate` join the GhosttyTerminal seal. | ✅ Done |
-| **6 — Always-on** | Sessions survive app close (tmux-backed), menu-bar pulse, notifications | ⬜ |
+| **6 — Always-on** | **tmux-backed persistence** (opt-in `Service.persistent`): persistent services run inside a dedicated `tmux -L helm` server, survive app close, reattach on launch. Status via `pane-died` hook → `deaths.log` → `EVFILT_VNODE` tail (push, zero-poll, detach-surviving) + bounded `list-panes`. Persistent **Stop** = kill-session-then-teardown. Log panel (persistent-only, `pipe-pane` → ANSI-stripped, capped). MenuBarExtra + local notifications; app survives window close. No Rust (the tmux audit was the §13 spike — passed). **Limitation:** persistent agents lose OSC progress/desktop-notification signals through tmux (bell/title/death only). | ✅ Done |
 | **7 — Polish** | Split panes, command palette (⌘K), themes (GhosttyTheme — 485 schemes), keybindings, terminfo fidelity | ⬜ |
 
 Phases 1–3 = usable daily driver. 4–6 = better than Solo/Unpeel. 7 = beautiful.
+
+**Status (2026-06-28): Phases 1–6 complete & pushed to `main`.** Helm is functionally
+done — projects/services CRUD, decoupled long-lived sessions, per-service process control,
+git-worktree fan-out, agent-state layer, and tmux-backed always-on persistence. Phase 7
+(UI/polish) is intentionally deferred until the frontend pass.
 
 ---
 

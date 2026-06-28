@@ -20,6 +20,11 @@ import GhosttyTerminal
 final class AgentStateDetector: ObservableObject {
     @Published private(set) var agentState: AgentState = .unknown
 
+    /// Fires on each FRESH bell/notification latch (m4) so a repeat ping isn't lost
+    /// the way `$agentState` collapses identical values. `TerminalSession`
+    /// republishes it; `AttentionNotifier` posts a banner while the app is away.
+    let attentionPing = PassthroughSubject<Void, Never>()
+
     private let viewState: TerminalViewState
     private let heuristic: AgentTitleHeuristic   // .disabled by default
     private var cancellables: Set<AnyCancellable> = []
@@ -112,6 +117,7 @@ final class AgentStateDetector: ObservableObject {
         if let n = viewState.lastDesktopNotificationAt, n != lastNotificationSeenAt {
             lastNotificationSeenAt = n
             attentionLatched = true                                   // high-confidence
+            attentionPing.send()                                      // m4: fresh ping
         }
         if let b = viewState.lastBellAt, b != lastBellSeenAt {        // medium-confidence
             lastBellSeenAt = b
@@ -119,6 +125,7 @@ final class AgentStateDetector: ObservableObject {
             if lastBellLatchAt == nil || b.timeIntervalSince(lastBellLatchAt!) > 1.0 {
                 attentionLatched = true
                 lastBellLatchAt = b
+                attentionPing.send()                                  // m4: fresh ping
             }
         }
     }
@@ -128,7 +135,7 @@ final class AgentStateDetector: ObservableObject {
 /// When enabled it classifies a window title as `.working` / `.waiting` / `.idle`
 /// (used only by `AgentStateDetector.recompute` step 4). Guesses dressed as
 /// patterns; ship disabled, tune only after observing real Claude titles (⚠️O3).
-struct AgentTitleHeuristic {
+struct AgentTitleHeuristic: Sendable {
     var enabled: Bool
     var workingMarkers: [String]
     var waitingMarkers: [String]
@@ -142,12 +149,12 @@ struct AgentTitleHeuristic {
         return .idle
     }
 
-    static let disabled = AgentTitleHeuristic(
+    nonisolated static let disabled = AgentTitleHeuristic(
         enabled: false, workingMarkers: [], waitingMarkers: []
     )
 
     /// Opt-in; ⚠️O3 verify against real titles before enabling.
-    static let experimental = AgentTitleHeuristic(
+    nonisolated static let experimental = AgentTitleHeuristic(
         enabled: true,
         workingMarkers: ["✳", "esc to interrupt", "running", "working"],
         waitingMarkers: ["?", "waiting", "(y/n)", "approve", "allow"]

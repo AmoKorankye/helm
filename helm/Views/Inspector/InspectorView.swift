@@ -202,6 +202,22 @@ private struct ServiceInspector: View {
                 Toggle("Run per git worktree", isOn: $draft.worktreeEnabled)
             }
 
+            Section("Persistence") {
+                Toggle("Persistent (survives app close)", isOn: $draft.persistent)
+                    .disabled(!tmuxAvailable)
+                Text(persistenceHelp)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if draft.persistent && tmuxAvailable && service.isAgent {
+                    // B3: be honest — persistent agents lose live progress + OSC
+                    // desktop notifications under tmux; death + bell still detected.
+                    Label("Live progress and desktop notifications are unavailable for persistent agents. Death and bell are still detected.",
+                          systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+
             Section("Agent") {
                 Picker("Detection", selection: agentSelection) {
                     Text("Auto").tag(AgentDetectionChoice.auto)
@@ -229,6 +245,17 @@ private struct ServiceInspector: View {
             || draft.restartPolicy != service.restartPolicy
             || draft.worktreeEnabled != service.worktreeEnabled
             || draft.agentKindOverride != service.agentKindOverride
+            || draft.persistent != service.persistent
+    }
+
+    /// tmux presence drives the Persistent toggle (graceful degradation, §9).
+    private var tmuxAvailable: Bool { TmuxService().isAvailable }
+
+    private var persistenceHelp: String {
+        if !tmuxAvailable {
+            return "Requires tmux — install with `brew install tmux`. The setting is kept and re-enables when tmux is available."
+        }
+        return "Persistent runs this service under tmux so it survives app close. Changes take effect on the next start/restart."
     }
 
     /// Maps the draft's `agentKindOverride` (nil = auto) to/from the Picker's

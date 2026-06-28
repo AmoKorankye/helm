@@ -11,6 +11,8 @@ struct ServiceDraft {
     var worktreeEnabled: Bool = false
     /// Phase 5 agent-detection override. `nil` = AUTO (derive from command).
     var agentKindOverride: AgentKind? = nil
+    /// Phase 6: launch under tmux so the process survives app close.
+    var persistent: Bool = false
 
     init() {}
 
@@ -21,6 +23,7 @@ struct ServiceDraft {
         restartPolicy = service.restartPolicy
         worktreeEnabled = service.worktreeEnabled
         agentKindOverride = service.agentKindOverride
+        persistent = service.persistent
     }
 
     /// Name must be non-empty (trimmed). Command MAY be empty (= shell).
@@ -41,6 +44,7 @@ struct ServiceDraft {
         service.restartPolicy = restartPolicy
         service.worktreeEnabled = worktreeEnabled
         service.agentKindOverride = agentKindOverride
+        service.persistent = persistent
     }
 
     func makeService() -> Service {
@@ -50,7 +54,8 @@ struct ServiceDraft {
             autoStart: autoStart,
             restartPolicy: restartPolicy,
             worktreeEnabled: worktreeEnabled,
-            agentKindOverride: agentKindOverride
+            agentKindOverride: agentKindOverride,
+            persistent: persistent
         )
     }
 }

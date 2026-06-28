@@ -5,6 +5,7 @@ struct SidebarView: View {
     @EnvironmentObject var sessions: SessionManager
     @EnvironmentObject var worktrees: WorktreeStore
     @EnvironmentObject var presets: PresetStore
+    @EnvironmentObject var coordinator: PersistenceCoordinator
     @Binding var selectedProjectID: UUID?
     @Binding var selectedServiceID: UUID?
     @Binding var selectedInstance: SessionInstance
@@ -76,6 +77,32 @@ struct SidebarView: View {
                             projectToDelete = ProjectDeletion(projectID: project.id, name: project.name)
                         }
                     }
+                }
+            }
+
+            // Phase 6: orphan tmux sessions (Service deleted while away). Never
+            // auto-killed; offer a Kill action (§4).
+            if !coordinator.orphans.isEmpty {
+                Section {
+                    ForEach(coordinator.orphans) { orphan in
+                        HStack(spacing: 8) {
+                            Image(systemName: "pin.slash")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            Text(orphan.label)
+                                .font(.system(size: 13))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                            Button("Kill") { coordinator.killOrphan(slug: orphan.slug) }
+                                .buttonStyle(.borderless)
+                                .font(.caption)
+                        }
+                    }
+                } header: {
+                    Text("Detached (orphan)")
+                        .font(.subheadline.weight(.semibold))
+                        .textCase(nil)
                 }
             }
         }
@@ -352,6 +379,12 @@ struct ServiceRow: View {
             }
             Text(label)
                 .font(.system(size: 13))
+            if service.persistent {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .help("Persistent — survives app close")
+            }
             if let rollUp {
                 RollUpBadge(status: rollUp)
             }

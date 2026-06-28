@@ -102,20 +102,40 @@ struct ContentView: View {
                 instance: instance,
                 command: sel.service.command,
                 workingDirectory: cwd,
-                isAgent: sel.service.isAgent
+                isAgent: sel.service.isAgent,
+                persistent: sel.service.persistent,
+                displayName: SessionManager.displayName(service: sel.service, project: sel.project, instance: instance)
             )
-            SessionHostView(manager: sessions, selectedKey: key)
-                .overlay {
-                    RestartOverlay(session: session) {
-                        manualRestart(
-                            key: key,
-                            command: sel.service.command,
-                            workingDirectory: cwd
-                        )
+            VStack(spacing: 0) {
+                SessionHostView(manager: sessions, selectedKey: key)
+                    .overlay {
+                        RestartOverlay(session: session) {
+                            manualRestart(
+                                key: key,
+                                command: sel.service.command,
+                                workingDirectory: cwd
+                            )
+                        }
                     }
-                }
+                LogPanelView(session: session)
+            }
+            // Selecting a `.detached` persistent session reattaches it (§5): lazy
+            // attach builds the surface only on first selection. Re-run when the
+            // selection key changes.
+            .onChange(of: key) { _, newKey in
+                reattachIfDetached(newKey)
+            }
+            .onAppear { reattachIfDetached(key) }
         } else {
             WelcomeView()
+        }
+    }
+
+    /// Reattach a `.detached` persistent session when it becomes the selection.
+    private func reattachIfDetached(_ key: SessionKey) {
+        guard let session = sessions.session(for: key), session.persistent else { return }
+        if case .detached = session.status {
+            sessions.reattach(key: key)
         }
     }
 
@@ -160,7 +180,9 @@ struct ContentView: View {
                 instance: instance,
                 command: service.command,
                 workingDirectory: cwd,
-                isAgent: service.isAgent
+                isAgent: service.isAgent,
+                persistent: service.persistent,
+                displayName: SessionManager.displayName(service: service, project: project, instance: instance)
             )
         }
         selectedProjectID = project.id
