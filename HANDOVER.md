@@ -232,7 +232,7 @@ was removed (fresh install starts empty). The pid-discovery + kqueue machinery
 
 ## 10. How to build/run
 
-- Open `helm/helm/helm.xcodeproj` in **Xcode** (full Xcode required, not just CLT;
+- Open `helm.xcodeproj` (at the repo root) in **Xcode** (full Xcode required, not just CLT;
   `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`).
 - `⌘R` to run. CLI build check:
   `xcodebuild -project helm.xcodeproj -scheme helm -configuration Debug build`.
