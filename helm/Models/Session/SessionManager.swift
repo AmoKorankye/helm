@@ -34,7 +34,8 @@ final class SessionManager: ObservableObject {
         let session = makeSession(
             key: key,
             command: service.command,
-            workingDirectory: project.directory
+            workingDirectory: project.directory,
+            isAgent: service.isAgent
         )
         sessions[key] = session
         return session
@@ -48,11 +49,17 @@ final class SessionManager: ObservableObject {
         forServiceID serviceID: UUID,
         instance: SessionInstance,
         command: String,
-        workingDirectory: String
+        workingDirectory: String,
+        isAgent: Bool = false
     ) -> TerminalSession {
         let key = SessionKey(serviceID: serviceID, instance: instance)
         if let existing = sessions[key] { return existing }
-        let session = makeSession(key: key, command: command, workingDirectory: workingDirectory)
+        let session = makeSession(
+            key: key,
+            command: command,
+            workingDirectory: workingDirectory,
+            isAgent: isAgent
+        )
         sessions[key] = session
         return session
     }
@@ -103,17 +110,22 @@ final class SessionManager: ObservableObject {
     func rebuild(
         key: SessionKey,
         command: String? = nil,
-        workingDirectory: String? = nil
+        workingDirectory: String? = nil,
+        isAgent: Bool? = nil
     ) -> TerminalSession? {
         guard let old = sessions[key] else { return nil }
         let cmd = command ?? old.command
         let dir = workingDirectory ?? old.workingDirectory
+        // M3: thread isAgent through restart so a rebuilt agent keeps detection.
+        // Default to the old session's value (a manual restart from the overlay/row
+        // doesn't pass it); a caller with the current Service can override.
+        let agent = isAgent ?? old.isAgent
         // Tear down the old session (suppress a late exit emit, cancel its Combine
         // subscriptions) WITHOUT emitting an exit event, then drop it so the host
         // view swaps the surface.
         exitSubscriptions[key] = nil
         old.invalidate()
-        let fresh = makeSession(key: key, command: cmd, workingDirectory: dir)
+        let fresh = makeSession(key: key, command: cmd, workingDirectory: dir, isAgent: agent)
         sessions[key] = fresh
         return fresh
     }
@@ -128,8 +140,18 @@ final class SessionManager: ObservableObject {
 
     // MARK: - Internals
 
-    private func makeSession(key: SessionKey, command: String, workingDirectory: String) -> TerminalSession {
-        let session = TerminalSession(key: key, command: command, workingDirectory: workingDirectory)
+    private func makeSession(
+        key: SessionKey,
+        command: String,
+        workingDirectory: String,
+        isAgent: Bool = false
+    ) -> TerminalSession {
+        let session = TerminalSession(
+            key: key,
+            command: command,
+            workingDirectory: workingDirectory,
+            isAgent: isAgent
+        )
         // Republish this session's exit onto the manager's single stream.
         exitSubscriptions[key] = session.didExit
             .sink { [weak self] status in

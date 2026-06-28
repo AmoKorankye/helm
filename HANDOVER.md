@@ -144,7 +144,7 @@ and `shell` services.
 | **2 — Projects & Services** | Add/edit/delete projects & services in-app (currently seed-only), config UI | ✅ Done |
 | **3 — Process management** | Per-service start/stop/restart (hover controls), status dots, auto-restart. **Strategy E′: status from ghostty `terminalDidClose`; Stop = surface teardown.** Per-service controls replaced the top toolbar; seeded project removed. (Log panel deferred.) | ✅ Done |
 | **4 — Worktrees** | Auto-detect git worktrees (`WorktreeService`), run a service per worktree (sidebar `DisclosureGroup`); one service → N `SessionKey(.worktree(branch:))` sessions; detached keyed by path-hash; prunable/bare excluded; derived-not-persisted (only `worktreeEnabled`). | ✅ Done |
-| **5 — Agent layer** | Parse Claude output for working/waiting state, show in sidebar, quick-launch presets | ⬜ Planned — Next |
+| **5 — Agent layer** | Agent-state badge in sidebar + quick-launch presets. **Reality check (Strategy E′ = no byte stream):** "parse Claude output" isn't possible; instead state from ghostty signals — reliable **attention** (bell/notif while unfocused), **done** (exit), **working** (OSC 9;4 progress via a forwarding-delegate shim, if the agent emits it); title heuristic disabled by default. Presets = real ephemeral Services (add+launch), not `.adHoc`. `AgentStateDetector`/`SessionSurfaceDelegate` join the GhosttyTerminal seal. | ✅ Done |
 | **6 — Always-on** | Sessions survive app close (tmux-backed), menu-bar pulse, notifications | ⬜ |
 | **7 — Polish** | Split panes, command palette (⌘K), themes (GhosttyTheme — 485 schemes), keybindings, terminfo fidelity | ⬜ |
 

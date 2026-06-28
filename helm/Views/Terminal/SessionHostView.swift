@@ -64,8 +64,11 @@ struct SessionHostView: NSViewRepresentable {
             let view = TerminalView(frame: container.bounds)
             view.autoresizingMask = [.width, .height]
             // Replicate the library representable's wiring order exactly:
-            // delegate (the TerminalViewState) → controller → configuration.
-            view.delegate = session.viewState
+            // delegate → controller → configuration. Phase 5 (§6/M1): the delegate
+            // is the session's forwarding shim, NOT the raw viewState — it forwards
+            // every stock call to viewState (so all @Published state stays
+            // populated) AND captures OSC 9;4 progress the stock object drops.
+            view.delegate = session.hostDelegate
             view.controller = session.viewState.controller
             view.configuration = session.viewState.configuration
             view.isHidden = true

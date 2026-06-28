@@ -9,6 +9,8 @@ struct ServiceDraft {
     var autoStart: Bool = false
     var restartPolicy: RestartPolicy = .never
     var worktreeEnabled: Bool = false
+    /// Phase 5 agent-detection override. `nil` = AUTO (derive from command).
+    var agentKindOverride: AgentKind? = nil
 
     init() {}
 
@@ -18,6 +20,7 @@ struct ServiceDraft {
         autoStart = service.autoStart
         restartPolicy = service.restartPolicy
         worktreeEnabled = service.worktreeEnabled
+        agentKindOverride = service.agentKindOverride
     }
 
     /// Name must be non-empty (trimmed). Command MAY be empty (= shell).
@@ -37,6 +40,7 @@ struct ServiceDraft {
         service.autoStart = autoStart
         service.restartPolicy = restartPolicy
         service.worktreeEnabled = worktreeEnabled
+        service.agentKindOverride = agentKindOverride
     }
 
     func makeService() -> Service {
@@ -45,7 +49,8 @@ struct ServiceDraft {
             command: command.trimmingCharacters(in: .whitespacesAndNewlines),
             autoStart: autoStart,
             restartPolicy: restartPolicy,
-            worktreeEnabled: worktreeEnabled
+            worktreeEnabled: worktreeEnabled,
+            agentKindOverride: agentKindOverride
         )
     }
 }

@@ -31,6 +31,29 @@ final class TerminalSession: ObservableObject {
     @Published private(set) var status: SessionStatus = .starting
     private(set) var startedAt: Date
 
+    /// Whether this session runs a CLI agent (drives the detector + sidebar badge).
+    /// Threaded through from `Service.isAgent` and preserved across restart (M3).
+    let isAgent: Bool
+
+    /// Inferred agent state, republished from the owned `AgentStateDetector` so
+    /// views observe the SESSION (like `status`) and never the detector directly.
+    /// Stays `.unknown` for non-agent sessions (no detector attached).
+    @Published private(set) var agentState: AgentState = .unknown
+
+    /// The detector that derives `agentState` from libghostty signals + OSC 9;4
+    /// progress. nil for non-agent sessions. Owned here (inside the session seal).
+    private let detector: AgentStateDetector?
+
+    /// Helm-owned forwarding delegate set as the hosted view's `delegate` in place
+    /// of `viewState` (§6 / M1): forwards every stock call to `viewState` AND pipes
+    /// OSC 9;4 progress to `detector`. Retained here so the host view's `weak`
+    /// delegate ref stays alive for the session's lifetime.
+    private let surfaceDelegate: SessionSurfaceDelegate
+
+    /// The delegate `SessionHostView` installs on the hosted terminal view. Exposed
+    /// as the stock protocol type so the host stays unaware of the forwarder shape.
+    var hostDelegate: any TerminalSurfaceViewDelegate { surfaceDelegate }
+
     /// Set true when a user Stop must tear down (free) this session's ghostty
     /// surface so ghostty closes the PTY master, SIGHUPing the whole foreground
     /// process group (zsh → npm → node). The session itself STAYS in the
@@ -58,11 +81,12 @@ final class TerminalSession: ObservableObject {
     /// republish to the supervisor. Carries the final `status`.
     let didExit = PassthroughSubject<SessionStatus, Never>()
 
-    init(key: SessionKey, command: String, workingDirectory: String) {
+    init(key: SessionKey, command: String, workingDirectory: String, isAgent: Bool = false) {
         self.key = key
         self.command = command
         self.workingDirectory = workingDirectory
         self.startedAt = Date()
+        self.isAgent = isAgent
 
         // --- Config logic moved verbatim from the retired HelmTerminalPane ---
         // KEEP the Phase-1 `.exec` path exactly (Strategy E): ghostty owns the
@@ -81,8 +105,32 @@ final class TerminalSession: ObservableObject {
         state.configuration = TerminalSurfaceOptions(workingDirectory: workingDirectory)
         self.viewState = state
 
+        // Agent layer (Phase 5). Only agent sessions get a detector; the forwarding
+        // delegate is used uniformly (progress just no-ops when detector == nil), so
+        // the host wiring is identical for every session (§6).
+        let detector = isAgent ? AgentStateDetector(viewState: state) : nil
+        self.detector = detector
+        self.surfaceDelegate = SessionSurfaceDelegate(forwardingTo: state, progress: detector)
+
         installCloseHandler()
         observeSurfaceAttach()
+
+        // Republish the detector's agentState onto the session (so views observe the
+        // SESSION, like `status`). Zero-poll: a Combine sink, not a timer.
+        if let detector {
+            detector.$agentState
+                .sink { [weak self] in self?.agentState = $0 }
+                .store(in: &cancellables)
+        }
+    }
+
+    // MARK: - Agent layer (Phase 5)
+
+    /// Drop the attention latch for this session (M2): called from the sidebar row
+    /// tap so re-selecting an attention session clears the pulse even if it never
+    /// regains focus. No-op for non-agent sessions.
+    func clearAttention() {
+        detector?.clearAttention()
     }
 
     // MARK: - Status wiring (ghostty-driven, zero-poll)
@@ -128,6 +176,7 @@ final class TerminalSession: ObservableObject {
         case .running, .starting:
             hasEmittedExit = true
             status = .exited(code: nil, byUser: byUser)
+            detector?.sessionTerminated()   // M3: latch .done; a late title can't resurrect it.
             didExit.send(status)
         default:
             break   // already terminal.
@@ -147,6 +196,7 @@ final class TerminalSession: ObservableObject {
         stopRequestedByUser = true
         hasEmittedExit = true          // suppress any late onClose double-emit.
         status = .exited(code: nil, byUser: true)
+        detector?.sessionTerminated()  // M3: latch .done on the user-stop path too.
         surfaceShouldClose = true      // host frees the surface → child SIGHUP.
     }
 

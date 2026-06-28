@@ -39,6 +39,9 @@ struct ContentView: View {
                 },
                 onRestartService: { service, project, instance in
                     restartService(service, in: project, instance: instance)
+                },
+                onLaunchPreset: { preset in
+                    launchPreset(preset)
                 }
             )
         } detail: {
@@ -98,7 +101,8 @@ struct ContentView: View {
                 forServiceID: sel.service.id,
                 instance: instance,
                 command: sel.service.command,
-                workingDirectory: cwd
+                workingDirectory: cwd,
+                isAgent: sel.service.isAgent
             )
             SessionHostView(manager: sessions, selectedKey: key)
                 .overlay {
@@ -147,14 +151,16 @@ struct ContentView: View {
             sessions.rebuild(
                 key: key,
                 command: service.command,
-                workingDirectory: cwd
+                workingDirectory: cwd,
+                isAgent: service.isAgent
             )
         } else {
             _ = sessions.session(
                 forServiceID: service.id,
                 instance: instance,
                 command: service.command,
-                workingDirectory: cwd
+                workingDirectory: cwd,
+                isAgent: service.isAgent
             )
         }
         selectedProjectID = project.id
@@ -210,6 +216,28 @@ struct ContentView: View {
     private func manualRestart(key: SessionKey, command: String, workingDirectory: String) {
         supervisor.cancel(key)
         sessions.rebuild(key: key, command: command, workingDirectory: workingDirectory)
+    }
+
+    // MARK: - Preset launch (B1 — add a real service from a template, then start it)
+
+    /// Launch a preset into the selected project (plan §4.2 / B1): build a real
+    /// `Service` from the template, ADD it to the store (so it appears in the
+    /// sidebar, is inspectable/stoppable/restartable/persisted), then start +
+    /// select it via the EXISTING `startService` path. No `.adHoc` — the new
+    /// service flows through detail/sidebar/inspector/status/badge for free.
+    /// `agentKindOverride: preset.agentKind` seeds the badge.
+    private func launchPreset(_ preset: LaunchPreset) {
+        guard let project = store.project(id: selectedProjectID) else { return }
+        let service = Service(
+            name: preset.name,
+            command: preset.command,
+            agentKindOverride: preset.agentKind
+        )
+        store.addService(service, to: project.id)
+        // Re-read the project so `startService` sees the freshly added service in a
+        // current snapshot (selection + cwd resolution).
+        guard let updated = store.project(id: project.id) else { return }
+        startService(service, in: updated, instance: .primary)
     }
 
     // MARK: - Coordination (the only place SessionManager + store meet)

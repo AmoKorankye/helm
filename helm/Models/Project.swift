@@ -49,6 +49,11 @@ struct Service: Identifiable, Codable, Hashable {
     /// 5). Worktrees themselves are DERIVED at runtime, never persisted — only
     /// this opt-in boolean is.
     var worktreeEnabled: Bool = false
+    /// Phase 5: agent-detection override. `nil` = AUTO (derive from `command` via
+    /// `AgentKind.autodetect`); set explicitly to force on/off (`.none` forces
+    /// "not an agent"). Additive + defaulted to `nil` so existing projects.json
+    /// round-trips (HANDOVER §6.8/§9.5).
+    var agentKindOverride: AgentKind? = nil
 
     init(
         id: UUID = UUID(),
@@ -58,7 +63,8 @@ struct Service: Identifiable, Codable, Hashable {
         sortOrder: Int = 0,
         environment: [String: String] = [:],
         restartPolicy: RestartPolicy = .never,
-        worktreeEnabled: Bool = false
+        worktreeEnabled: Bool = false,
+        agentKindOverride: AgentKind? = nil
     ) {
         self.id = id
         self.name = name
@@ -68,7 +74,20 @@ struct Service: Identifiable, Codable, Hashable {
         self.environment = environment
         self.restartPolicy = restartPolicy
         self.worktreeEnabled = worktreeEnabled
+        self.agentKindOverride = agentKindOverride
     }
+
+    /// Resolved agent kind: an explicit override wins (`.none` → not an agent);
+    /// otherwise auto-detect from the command. `nil` = not an agent.
+    var resolvedAgentKind: AgentKind? {
+        if let agentKindOverride {
+            return agentKindOverride == .none ? nil : agentKindOverride
+        }
+        return AgentKind.autodetect(command: command)
+    }
+
+    /// Whether this service runs a CLI agent (so it gets a detector + badge).
+    var isAgent: Bool { resolvedAgentKind != nil }
 
     /// Explicit decoder so additive/defaulted fields (`restartPolicy`,
     /// `worktreeEnabled`, `sortOrder`, `environment`, `autoStart`) tolerate a
@@ -88,6 +107,7 @@ struct Service: Identifiable, Codable, Hashable {
         environment = try c.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
         restartPolicy = try c.decodeIfPresent(RestartPolicy.self, forKey: .restartPolicy) ?? .never
         worktreeEnabled = try c.decodeIfPresent(Bool.self, forKey: .worktreeEnabled) ?? false
+        agentKindOverride = try c.decodeIfPresent(AgentKind.self, forKey: .agentKindOverride) ?? nil
     }
 }
 

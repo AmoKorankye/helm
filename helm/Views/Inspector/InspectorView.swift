@@ -110,6 +110,33 @@ private struct ProjectInspector: View {
     }
 }
 
+/// Closed picker choice for agent detection. Bridges the optional
+/// `agentKindOverride` (nil = auto) to a non-optional `Picker` selection.
+private enum AgentDetectionChoice: Hashable {
+    case auto       // nil override → autodetect
+    case claude     // .claude
+    case generic    // .generic
+    case none       // .none (forced off)
+
+    init(override: AgentKind?) {
+        switch override {
+        case nil: self = .auto
+        case .claude?: self = .claude
+        case .generic?: self = .generic
+        case .none?: self = .none
+        }
+    }
+
+    var override: AgentKind? {
+        switch self {
+        case .auto: return nil
+        case .claude: return .claude
+        case .generic: return .generic
+        case .none: return AgentKind.none
+        }
+    }
+}
+
 // MARK: - Service inspector
 
 private struct ServiceInspector: View {
@@ -175,6 +202,18 @@ private struct ServiceInspector: View {
                 Toggle("Run per git worktree", isOn: $draft.worktreeEnabled)
             }
 
+            Section("Agent") {
+                Picker("Detection", selection: agentSelection) {
+                    Text("Auto").tag(AgentDetectionChoice.auto)
+                    Text("Claude").tag(AgentDetectionChoice.claude)
+                    Text("Generic").tag(AgentDetectionChoice.generic)
+                    Text("Not an agent").tag(AgentDetectionChoice.none)
+                }
+                Text(agentDetectionHelp)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section {
                 Button("Save") { save() }
                     .disabled(!isDirty)
@@ -189,6 +228,30 @@ private struct ServiceInspector: View {
             || draft.autoStart != service.autoStart
             || draft.restartPolicy != service.restartPolicy
             || draft.worktreeEnabled != service.worktreeEnabled
+            || draft.agentKindOverride != service.agentKindOverride
+    }
+
+    /// Maps the draft's `agentKindOverride` (nil = auto) to/from the Picker's
+    /// closed choice enum. Changing detection takes effect on the next start/
+    /// restart (a live session's `isAgent` is fixed at spawn time; M3 preserves it).
+    private var agentSelection: Binding<AgentDetectionChoice> {
+        Binding(
+            get: { AgentDetectionChoice(override: draft.agentKindOverride) },
+            set: { draft.agentKindOverride = $0.override }
+        )
+    }
+
+    private var agentDetectionHelp: String {
+        switch AgentDetectionChoice(override: draft.agentKindOverride) {
+        case .auto:
+            return service.isAgent
+                ? "Auto-detected as an agent from the command."
+                : "Auto: no agent detected in the command."
+        case .claude, .generic:
+            return "Forced on — this service shows an agent badge."
+        case .none:
+            return "Forced off — no agent badge for this service."
+        }
     }
 
     /// Drift detection (instance-aware, grill M1): if the live session for THIS
