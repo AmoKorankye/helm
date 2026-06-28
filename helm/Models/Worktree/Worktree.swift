@@ -15,8 +15,8 @@ struct Worktree: Identifiable, Hashable {
     /// HEAD commit SHA (porcelain `HEAD` line). **Optional** — a bare worktree
     /// record is literally `worktree <path>\nbare` with NO HEAD line (grill B2).
     let head: String?
-    /// The repository's main worktree (git emits it first; cross-checked by
-    /// standardized path-equality, grill m9).
+    /// The repository's main worktree. Assigned to the FIRST non-phantom record
+    /// (git emits the main worktree first); exactly one record is `isMain` (m9).
     let isMain: Bool
     /// `bare` line present. A bare main has no checkout → NOT spawnable (excluded
     /// from fan-out rows, B2). Linked worktrees of a bare repo are normal — keep them.

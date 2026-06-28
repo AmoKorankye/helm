@@ -52,7 +52,7 @@ final class ProjectStore: ObservableObject {
 
     func moveProjects(from offsets: IndexSet, to destination: Int) {
         var ordered = projects.sorted { $0.sortOrder < $1.sortOrder }
-        Self.move(&ordered, fromOffsets: offsets, toOffset: destination)
+        ordered.move(fromOffsets: offsets, toOffset: destination)
         for (idx, project) in ordered.enumerated() {
             if let i = projects.firstIndex(where: { $0.id == project.id }) {
                 projects[i].sortOrder = idx
@@ -90,7 +90,7 @@ final class ProjectStore: ObservableObject {
     func moveServices(in projectID: UUID, from offsets: IndexSet, to destination: Int) {
         guard let pi = projects.firstIndex(where: { $0.id == projectID }) else { return }
         var ordered = projects[pi].services.sorted { $0.sortOrder < $1.sortOrder }
-        Self.move(&ordered, fromOffsets: offsets, toOffset: destination)
+        ordered.move(fromOffsets: offsets, toOffset: destination)
         for idx in ordered.indices {
             ordered[idx].sortOrder = idx
         }
@@ -120,31 +120,10 @@ final class ProjectStore: ObservableObject {
     /// exit without restarting. GhosttyTerminal-free; pure value lookup. Returns
     /// `.never` if the service was deleted out from under a pending exit event.
     func restartPolicy(forServiceID serviceID: UUID) -> RestartPolicy {
-        for project in projects {
-            if let service = project.services.first(where: { $0.id == serviceID }) {
-                return service.restartPolicy
-            }
-        }
-        return .never
+        service(id: serviceID)?.service.restartPolicy ?? .never
     }
 
     // MARK: - Internals
-
-    /// Foundation-only reimplementation of `Array.move(fromOffsets:toOffset:)`
-    /// so this store needn't import SwiftUI (keeps the model layer view-free).
-    /// Matches SwiftUI's semantics: `toOffset` is an index in the *original*
-    /// array (the position the moved block is inserted before).
-    private static func move<T>(_ array: inout [T], fromOffsets source: IndexSet, toOffset destination: Int) {
-        let moved = source.map { array[$0] }
-        // Remove from the back so earlier indices stay valid.
-        for index in source.sorted(by: >) {
-            array.remove(at: index)
-        }
-        // Adjust the insertion point for elements removed before it.
-        let removedBefore = source.filter { $0 < destination }.count
-        let insertAt = destination - removedBefore
-        array.insert(contentsOf: moved, at: insertAt)
-    }
 
     private func persist() {
         try? persistence.save(projects)

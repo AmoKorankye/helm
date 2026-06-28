@@ -7,7 +7,6 @@ import SwiftUI
 /// `TerminalSession` to detect drift for the "restart to apply" banner.
 struct InspectorView: View {
     @EnvironmentObject private var store: ProjectStore
-    @EnvironmentObject private var sessions: SessionManager
 
     let selectedProjectID: UUID?
     let selectedServiceID: UUID?
@@ -66,7 +65,7 @@ private struct ProjectInspector: View {
         Form {
             Section("Project") {
                 TextField("Name", text: $draft.name)
-                errorText(for: .name)
+                FieldError(errors: errors, field: .name)
 
                 HStack {
                     Text(draft.directory.isEmpty ? "No directory" : draft.directory)
@@ -79,7 +78,7 @@ private struct ProjectInspector: View {
                         }
                     }
                 }
-                errorText(for: .directory)
+                FieldError(errors: errors, field: .directory)
             }
 
             Section {
@@ -92,13 +91,6 @@ private struct ProjectInspector: View {
 
     private var isDirty: Bool {
         draft.name != project.name || draft.directory != project.directory
-    }
-
-    @ViewBuilder
-    private func errorText(for field: ValidationError.Field) -> some View {
-        if let error = errors.first(where: { $0.field == field }) {
-            Text(error.message).font(.caption).foregroundStyle(.red)
-        }
     }
 
     private func save() {
@@ -190,7 +182,7 @@ private struct ServiceInspector: View {
 
             Section("Service") {
                 TextField("Name", text: $draft.name)
-                errorText(for: .name)
+                FieldError(errors: errors, field: .name)
 
                 TextField("Command (empty = shell)", text: $draft.command)
                 Toggle("Auto-start with the app", isOn: $draft.autoStart)
@@ -249,7 +241,8 @@ private struct ServiceInspector: View {
     }
 
     /// tmux presence drives the Persistent toggle (graceful degradation, §9).
-    private var tmuxAvailable: Bool { TmuxService().isAvailable }
+    /// Resolved once (not per `body` read): `isAvailable` does up to 3 disk probes.
+    private let tmuxAvailable = TmuxService().isAvailable
 
     private var persistenceHelp: String {
         if !tmuxAvailable {
@@ -295,13 +288,6 @@ private struct ServiceInspector: View {
         let dirDrift = session.workingDirectory != expectedCwd
         guard commandDrift || dirDrift else { return nil }
         return (key, "The running session was started with a different command or directory. Restart to pick up the saved settings.")
-    }
-
-    @ViewBuilder
-    private func errorText(for field: ValidationError.Field) -> some View {
-        if let error = errors.first(where: { $0.field == field }) {
-            Text(error.message).font(.caption).foregroundStyle(.red)
-        }
     }
 
     private func save() {

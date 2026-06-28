@@ -116,7 +116,9 @@ struct TmuxService: Sendable {
         guard let out else { return [] }
         var result: [(slug: String, dead: Bool, attached: Bool)] = []
         for line in out.split(separator: "\n") {
-            let f = line.split(separator: " ", omittingEmptySubsequences: true)
+            // Fixed-position fields: `pane_dead` (middle) can be empty, so DON'T omit
+            // empty subsequences — that would shift `session_attached` left.
+            let f = line.split(separator: " ", omittingEmptySubsequences: false)
             guard f.count >= 3 else { continue }
             result.append((slug: String(f[0]), dead: f[1] == "1", attached: f[2] == "1"))
         }
@@ -131,13 +133,16 @@ struct TmuxService: Sendable {
                        "#{pane_dead} #{pane_dead_status} #{session_attached}"])
         guard let out else { return .gone }
         let line = out.split(separator: "\n").first.map(String.init) ?? ""
-        let f = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
-        guard !f.isEmpty else { return .gone }
-        if f.first == "1" {
-            let code = Int32(f.count > 1 ? f[1] : "") ?? 0
+        // Fixed-position fields `pane_dead pane_dead_status session_attached`:
+        // `pane_dead_status` (middle) is empty for a live pane, so DON'T omit empty
+        // subsequences — that would shift `session_attached` left and misread it.
+        let f = line.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        guard f.count >= 3 else { return .gone }
+        if f[0] == "1" {
+            let code = Int32(f[1]) ?? 0
             return .paneDead(code: code)
         }
-        let attached = (f.count > 2 ? f[2] : "0") == "1"
+        let attached = f[2] == "1"
         return .alive(attached: attached)
     }
 

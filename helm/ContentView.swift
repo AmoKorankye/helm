@@ -296,8 +296,8 @@ struct ContentView: View {
     // MARK: - Coordination (the only place SessionManager + store meet)
 
     private func deleteService(id serviceID: UUID, in projectID: UUID) {
-        let ids = store.deleteService(id: serviceID, from: projectID)        // now [UUID]
-        let keys = sessions.keys(forServiceIDs: Set(ids))                    // live keys (B1)
+        let ids = store.deleteService(id: serviceID, from: projectID)
+        let keys = sessions.keys(forServiceIDs: Set(ids))
         keys.forEach { supervisor.cancel($0); sessions.close($0) }
         if selectedServiceID == serviceID {
             selectedServiceID = nil
@@ -305,8 +305,8 @@ struct ContentView: View {
     }
 
     private func deleteProject(id projectID: UUID) {
-        let ids = store.deleteProject(id: projectID)                        // now [UUID]
-        let keys = sessions.keys(forServiceIDs: Set(ids))                   // live keys (B1)
+        let ids = store.deleteProject(id: projectID)
+        let keys = sessions.keys(forServiceIDs: Set(ids))
         keys.forEach { supervisor.cancel($0); sessions.close($0) }
         if selectedProjectID == projectID {
             selectedProjectID = nil

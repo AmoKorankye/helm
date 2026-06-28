@@ -271,12 +271,10 @@ final class TerminalSession: ObservableObject {
             .sink { [weak self] _ in
                 guard let self else { return }
                 switch self.status {
-                case .starting:
-                    self.status = .running
-                case .detached:
-                    // Persistent reattach: the surface re-attached to a live tmux
-                    // session → back to running. (Reattach only builds a surface
-                    // when liveness was .alive, M2, so this never lights a corpse.)
+                // `.detached` is the persistent-reattach case: the surface re-attached
+                // to a live tmux session → back to running. (Reattach only builds a
+                // surface when liveness was .alive, M2, so this never lights a corpse.)
+                case .starting, .detached:
                     self.status = .running
                 default:
                     break
@@ -320,6 +318,11 @@ final class TerminalSession: ObservableObject {
         status = .exited(code: nil, byUser: true)
         detector?.sessionTerminated()  // M3: latch .done on the user-stop path too.
         surfaceShouldClose = true      // host frees the surface → child SIGHUP.
+        // DELIBERATELY no `didExit.send` here (unlike `stopPersistent`): a non-
+        // persistent user Stop must NOT notify the supervisor — the session simply
+        // stays put in `.exited(byUser:true)`. Adding an emit here would let the
+        // supervisor treat a user Stop as a restartable exit. Do not "unify" with
+        // `stopPersistent`.
     }
 
     /// Persistent Stop (M4): kill the tmux session and VERIFY it is gone FIRST,

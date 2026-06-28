@@ -71,30 +71,6 @@ final class SessionManager: ObservableObject {
         index.forget(slug: slug)
     }
 
-    /// Create-or-return the session for a service instance. Idempotent: calling
-    /// repeatedly for the same `(service, instance)` returns the same live
-    /// session, so switching away and back preserves the running process.
-    func session(
-        for service: Service,
-        in project: Project,
-        instance: SessionInstance = .primary
-    ) -> TerminalSession {
-        let key = SessionKey(serviceID: service.id, instance: instance)
-        if let existing = sessions[key] {
-            return existing
-        }
-        let session = makeSession(
-            key: key,
-            command: service.command,
-            workingDirectory: project.directory,
-            isAgent: service.isAgent,
-            persistent: service.persistent,
-            displayName: Self.displayName(service: service, project: project, instance: instance)
-        )
-        sessions[key] = session
-        return session
-    }
-
     /// Create-or-return the session for a specific (service, instance), spawning in
     /// an EXPLICIT working directory. Phase 4: the caller passes the worktree path
     /// for a `.worktree` instance; `project.directory` for `.primary`. Idempotent

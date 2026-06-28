@@ -55,7 +55,7 @@ final class PresetStore: ObservableObject {
 
     func move(from offsets: IndexSet, to destination: Int) {
         var ordered = presets.sorted { $0.sortOrder < $1.sortOrder }
-        Self.move(&ordered, fromOffsets: offsets, toOffset: destination)
+        ordered.move(fromOffsets: offsets, toOffset: destination)
         for idx in ordered.indices {
             ordered[idx].sortOrder = idx
         }
@@ -66,15 +66,6 @@ final class PresetStore: ObservableObject {
     /// Presets in stable display order.
     var sorted: [LaunchPreset] {
         presets.sorted { $0.sortOrder < $1.sortOrder }
-    }
-
-    /// Foundation-only reimplementation of `Array.move(fromOffsets:toOffset:)` so
-    /// this store needn't import SwiftUI (matches `ProjectStore.move`).
-    private static func move<T>(_ array: inout [T], fromOffsets source: IndexSet, toOffset destination: Int) {
-        let moved = source.map { array[$0] }
-        for index in source.sorted(by: >) { array.remove(at: index) }
-        let removedBefore = source.filter { $0 < destination }.count
-        array.insert(contentsOf: moved, at: destination - removedBefore)
     }
 
     private func persist() {

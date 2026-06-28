@@ -10,7 +10,8 @@ struct AddServiceSheet: View {
     @State private var draft = ServiceDraft()
     @State private var errors: [ValidationError] = []
 
-    private var tmuxAvailable: Bool { TmuxService().isAvailable }
+    /// Resolved once (not per `body` read): `isAvailable` does up to 3 disk probes.
+    private let tmuxAvailable = TmuxService().isAvailable
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -21,7 +22,7 @@ struct AddServiceSheet: View {
                 Text("Name").font(.subheadline).foregroundStyle(.secondary)
                 TextField("claude", text: $draft.name)
                     .textFieldStyle(.roundedBorder)
-                errorText(for: .name)
+                FieldError(errors: errors, field: .name)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -53,15 +54,6 @@ struct AddServiceSheet: View {
         }
         .padding(20)
         .frame(width: 420)
-    }
-
-    @ViewBuilder
-    private func errorText(for field: ValidationError.Field) -> some View {
-        if let error = errors.first(where: { $0.field == field }) {
-            Text(error.message)
-                .font(.caption)
-                .foregroundStyle(.red)
-        }
     }
 
     private func save() {

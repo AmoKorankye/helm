@@ -26,12 +26,16 @@ final class WorktreeStore: ObservableObject {
     /// callers that need the fresh set (fan-out start) can use the result.
     @discardableResult
     func refresh(_ project: Project) async -> WorktreeScan {
-        if let running = inFlight[project.id] { return await running.value }
+        let id = project.id
+        if let running = inFlight[id] { return await running.value }
         let task = Task { await service.worktrees(for: project) }
-        inFlight[project.id] = task
+        inFlight[id] = task
         let result = await task.value
-        inFlight[project.id] = nil
-        scans[project.id] = result
+        // Identity guard: only clear if THIS task is still the in-flight one, so a
+        // newer refresh's task isn't clobbered. (`Task` is a value type whose `==`
+        // compares the underlying job identity.)
+        if inFlight[id] == task { inFlight[id] = nil }
+        scans[id] = result
         return result
     }
 

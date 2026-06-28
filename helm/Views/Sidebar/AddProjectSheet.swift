@@ -19,7 +19,7 @@ struct AddProjectSheet: View {
                 Text("Name").font(.subheadline).foregroundStyle(.secondary)
                 TextField("My Project", text: $draft.name)
                     .textFieldStyle(.roundedBorder)
-                errorText(for: .name)
+                FieldError(errors: errors, field: .name)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -36,7 +36,7 @@ struct AddProjectSheet: View {
                         }
                     }
                 }
-                errorText(for: .directory)
+                FieldError(errors: errors, field: .directory)
             }
 
             HStack {
@@ -49,15 +49,6 @@ struct AddProjectSheet: View {
         }
         .padding(20)
         .frame(width: 420)
-    }
-
-    @ViewBuilder
-    private func errorText(for field: ValidationError.Field) -> some View {
-        if let error = errors.first(where: { $0.field == field }) {
-            Text(error.message)
-                .font(.caption)
-                .foregroundStyle(.red)
-        }
     }
 
     private func save() {

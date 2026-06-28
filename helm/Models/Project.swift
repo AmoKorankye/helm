@@ -114,7 +114,7 @@ struct Service: Identifiable, Codable, Hashable {
         environment = try c.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
         restartPolicy = try c.decodeIfPresent(RestartPolicy.self, forKey: .restartPolicy) ?? .never
         worktreeEnabled = try c.decodeIfPresent(Bool.self, forKey: .worktreeEnabled) ?? false
-        agentKindOverride = try c.decodeIfPresent(AgentKind.self, forKey: .agentKindOverride) ?? nil
+        agentKindOverride = try c.decodeIfPresent(AgentKind.self, forKey: .agentKindOverride)
         persistent = try c.decodeIfPresent(Bool.self, forKey: .persistent) ?? false
     }
 }

@@ -135,8 +135,11 @@ final class PersistenceCoordinator: ObservableObject {
 
     /// Parse one deaths.log line `slug exitcode` and route it into the manager.
     func ingestDeath(line: String) {
-        let f = line.split(separator: " ", omittingEmptySubsequences: true)
-        guard let slug = f.first.map(String.init) else { return }
+        // Fixed-position `slug exitcode`: DON'T omit empty subsequences so an empty
+        // exitcode (trailing field absent) doesn't shift `slug` — though `slug` here
+        // is `#{session_name}`, never empty. Tolerate a missing trailing field (→ 0).
+        let f = line.split(separator: " ", omittingEmptySubsequences: false)
+        guard let slug = f.first.map(String.init), !slug.isEmpty else { return }
         let code = Int32(f.count > 1 ? f[1] : "") ?? 0
         // Notify (death) BEFORE reaping so the index reverse-lookup still resolves.
         notifier?.notifyDeath(slug: slug, code: code,
