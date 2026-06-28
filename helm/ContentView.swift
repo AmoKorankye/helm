@@ -84,51 +84,82 @@ struct ContentView: View {
         }
     }
 
+    /// The pure, NON-mutating resolution of the current detail selection. Reads
+    /// only (`store.service(id:)`, `resolveSelectedInstance`, `SessionKey`,
+    /// `worktrees.workingDirectory`); it NEVER creates a session. The actual
+    /// create-or-return is a side effect (`ensureSession`) keyed off `key`, so the
+    /// view body can publish nothing during SwiftUI's render pass.
+    private var detailSelection: DetailSelection? {
+        guard let sel = store.service(id: selectedServiceID) else { return nil }
+        // §8.5 / m8: validate the selected instance so a vanished/prunable worktree
+        // never resolves to a junk session in project root.
+        let instance = resolveSelectedInstance(service: sel.service, project: sel.project)
+        let key = SessionKey(serviceID: sel.service.id, instance: instance)
+        let cwd = worktrees.workingDirectory(for: instance, in: sel.project)
+                  ?? sel.project.directory
+        return DetailSelection(
+            service: sel.service,
+            project: sel.project,
+            instance: instance,
+            key: key,
+            cwd: cwd
+        )
+    }
+
     @ViewBuilder
     private var detail: some View {
-        if let sel = store.service(id: selectedServiceID) {
-            // Create-or-return the long-lived session, then host it. The session
-            // (and its PTY/process) outlives this view, so switching services no
-            // longer tears it down. No `.id()`.
-            //
-            // §8.5 / m8: validate the selected instance BEFORE create-or-return so a
-            // vanished/prunable worktree never spawns a junk session in project root.
-            let instance = resolveSelectedInstance(service: sel.service, project: sel.project)
-            let key = SessionKey(serviceID: sel.service.id, instance: instance)
-            let cwd = worktrees.workingDirectory(for: instance, in: sel.project)
-                      ?? sel.project.directory
-            let session = sessions.session(
-                forServiceID: sel.service.id,
-                instance: instance,
-                command: sel.service.command,
-                workingDirectory: cwd,
-                isAgent: sel.service.isAgent,
-                persistent: sel.service.persistent,
-                displayName: SessionManager.displayName(service: sel.service, project: sel.project, instance: instance)
-            )
-            VStack(spacing: 0) {
-                SessionHostView(manager: sessions, selectedKey: key)
-                    .overlay {
-                        RestartOverlay(session: session) {
-                            manualRestart(
-                                key: key,
-                                command: sel.service.command,
-                                workingDirectory: cwd
-                            )
+        if let d = detailSelection {
+            // Non-mutating lookup ONLY (no create in body — that's `ensureSession`,
+            // a side effect below). The session and its PTY/process outlive this
+            // view, so switching services never tears it down. No `.id()`.
+            if let session = sessions.session(for: d.key) {
+                VStack(spacing: 0) {
+                    SessionHostView(manager: sessions, selectedKey: d.key)
+                        .overlay {
+                            RestartOverlay(session: session) {
+                                manualRestart(
+                                    key: d.key,
+                                    command: d.service.command,
+                                    workingDirectory: d.cwd
+                                )
+                            }
                         }
-                    }
-                LogPanelView(session: session)
+                    LogPanelView(session: session)
+                }
+            } else {
+                // Brief (~1 frame) placeholder the first time a given session is
+                // created: `ensureSession` (the `.task` below) creates it as a side
+                // effect, then the republish re-renders into the VStack above. An
+                // already-created session renders immediately (no flicker on switch).
+                Color(nsColor: .windowBackgroundColor)
             }
-            // Selecting a `.detached` persistent session reattaches it (§5): lazy
-            // attach builds the surface only on first selection. Re-run when the
-            // selection key changes.
-            .onChange(of: key) { _, newKey in
-                reattachIfDetached(newKey)
-            }
-            .onAppear { reattachIfDetached(key) }
         } else {
             WelcomeView()
         }
+        // Create-or-return + reattach as a SIDE EFFECT (outside the body update, so
+        // publishing the new session here is allowed). Re-runs whenever the
+        // selection key changes — lazy attach builds the surface on first selection.
+        Color.clear
+            .frame(width: 0, height: 0)
+            .task(id: detailSelection?.key) { ensureSession() }
+    }
+
+    /// Create-or-return the long-lived session for the current selection, then
+    /// reattach it if it's a detached persistent session. Runs from a `.task`
+    /// side effect — NEVER the view body — so the `@Published var sessions` mutation
+    /// the create performs happens outside SwiftUI's render pass.
+    private func ensureSession() {
+        guard let d = detailSelection else { return }
+        _ = sessions.session(
+            forServiceID: d.service.id,
+            instance: d.instance,
+            command: d.service.command,
+            workingDirectory: d.cwd,
+            isAgent: d.service.isAgent,
+            persistent: d.service.persistent,
+            displayName: SessionManager.displayName(service: d.service, project: d.project, instance: d.instance)
+        )
+        reattachIfDetached(d.key)
     }
 
     /// Reattach a `.detached` persistent session when it becomes the selection.
@@ -290,6 +321,18 @@ struct ContentView: View {
             set: { addServiceTargetProjectID = $0?.projectID }
         )
     }
+}
+
+/// The pure, fully-resolved detail selection: WHICH service/project/instance is
+/// shown, its `SessionKey`, and the resolved cwd. Computed by `detailSelection`
+/// with reads only (no mutation), so it's safe to evaluate inside the view body
+/// and to use as a `.task(id:)` trigger for the create-or-return side effect.
+private struct DetailSelection {
+    let service: Service
+    let project: Project
+    let instance: SessionInstance
+    let key: SessionKey
+    let cwd: String
 }
 
 /// Identifiable wrapper so the add-service sheet can bind to a target project.

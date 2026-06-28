@@ -22,7 +22,7 @@ struct TmuxService: Sendable {
     /// instead, exactly like `WorktreeService.resolveGit`).
     let tmuxPath: String?
 
-    init(tmuxPath: String? = TmuxService.resolveTmux()) {
+    nonisolated init(tmuxPath: String? = TmuxService.resolveTmux()) {
         self.tmuxPath = tmuxPath
     }
 
@@ -268,7 +268,7 @@ struct TmuxService: Sendable {
 
     /// Locate tmux by probing fixed paths (NEVER PATH/`env` under an empty process
     /// environment). Mirrors `WorktreeService.resolveGit`.
-    static func resolveTmux() -> String? {
+    nonisolated static func resolveTmux() -> String? {
         let candidates = ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/bin/tmux"]
         let fm = FileManager.default
         for candidate in candidates where fm.isExecutableFile(atPath: candidate) {

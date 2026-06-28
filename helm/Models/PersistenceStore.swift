@@ -7,7 +7,7 @@ import Foundation
 struct PersistenceStore {
     private let fileURL: URL
 
-    init(fileURL: URL? = nil) {
+    nonisolated init(fileURL: URL? = nil) {
         if let fileURL {
             self.fileURL = fileURL
         } else {
