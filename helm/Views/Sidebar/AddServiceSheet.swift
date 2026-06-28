@@ -32,6 +32,7 @@ struct AddServiceSheet: View {
             }
 
             Toggle("Auto-start with the app", isOn: $draft.autoStart)
+            Toggle("Run per git worktree", isOn: $draft.worktreeEnabled)
 
             HStack {
                 Spacer()

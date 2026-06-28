@@ -37,15 +37,17 @@ final class ProjectStore: ObservableObject {
         persist()
     }
 
-    /// Removes a project and reports the `SessionKey` of every service it
-    /// contained, so the caller can close any live terminals.
+    /// Removes a project and reports the serviceIDs it contained, so the caller
+    /// (ContentView) can enumerate the live session keys via `SessionManager` and
+    /// close them. The store cannot know runtime worktree instances, so it returns
+    /// serviceIDs and stays git/GhosttyTerminal-free (grill B1).
     @discardableResult
-    func deleteProject(id: UUID) -> [SessionKey] {
+    func deleteProject(id: UUID) -> [UUID] {
         guard let i = projects.firstIndex(where: { $0.id == id }) else { return [] }
-        let affected = projects[i].services.map { SessionKey(serviceID: $0.id) }
+        let ids = projects[i].services.map(\.id)
         projects.remove(at: i)
         persist()
-        return affected
+        return ids
     }
 
     func moveProjects(from offsets: IndexSet, to destination: Int) {
@@ -77,12 +79,12 @@ final class ProjectStore: ObservableObject {
     }
 
     @discardableResult
-    func deleteService(id serviceID: UUID, from projectID: UUID) -> [SessionKey] {
+    func deleteService(id serviceID: UUID, from projectID: UUID) -> [UUID] {
         guard let pi = projects.firstIndex(where: { $0.id == projectID }) else { return [] }
         guard let si = projects[pi].services.firstIndex(where: { $0.id == serviceID }) else { return [] }
         projects[pi].services.remove(at: si)
         persist()
-        return [SessionKey(serviceID: serviceID)]
+        return [serviceID]
     }
 
     func moveServices(in projectID: UUID, from offsets: IndexSet, to destination: Int) {

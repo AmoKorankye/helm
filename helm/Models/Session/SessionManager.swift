@@ -40,8 +40,33 @@ final class SessionManager: ObservableObject {
         return session
     }
 
+    /// Create-or-return the session for a specific (service, instance), spawning in
+    /// an EXPLICIT working directory. Phase 4: the caller passes the worktree path
+    /// for a `.worktree` instance; `project.directory` for `.primary`. Idempotent
+    /// per key — switching away and back preserves the running process.
+    func session(
+        forServiceID serviceID: UUID,
+        instance: SessionInstance,
+        command: String,
+        workingDirectory: String
+    ) -> TerminalSession {
+        let key = SessionKey(serviceID: serviceID, instance: instance)
+        if let existing = sessions[key] { return existing }
+        let session = makeSession(key: key, command: command, workingDirectory: workingDirectory)
+        sessions[key] = session
+        return session
+    }
+
     func session(for key: SessionKey) -> TerminalSession? {
         sessions[key]
+    }
+
+    /// Enumerate the live `SessionKey`s for a set of serviceIDs — `.primary` AND
+    /// every live `.worktree(...)` instance — straight from the dict (the single
+    /// source of truth). Lets `ProjectStore` stay git/Ghostty-free while delete
+    /// still tears down per-worktree sessions (grill B1).
+    func keys(forServiceIDs ids: Set<UUID>) -> [SessionKey] {
+        sessions.keys.filter { ids.contains($0.serviceID) }
     }
 
     // MARK: - Lifecycle

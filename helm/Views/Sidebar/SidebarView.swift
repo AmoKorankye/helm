@@ -3,8 +3,10 @@ import SwiftUI
 struct SidebarView: View {
     @EnvironmentObject var store: ProjectStore
     @EnvironmentObject var sessions: SessionManager
+    @EnvironmentObject var worktrees: WorktreeStore
     @Binding var selectedProjectID: UUID?
     @Binding var selectedServiceID: UUID?
+    @Binding var selectedInstance: SessionInstance
 
     // Injected coordination closures. The sidebar stays dumb: it never touches
     // SessionManager and never deletes from the store directly — deletes and
@@ -15,13 +17,19 @@ struct SidebarView: View {
     let onDeleteProject: (UUID) -> Void
     // Per-service lifecycle actions (revealed on row hover). Still dumb: the row
     // only reports intent; ContentView owns SessionManager/supervisor coordination.
-    let onStartService: (Service, Project) -> Void
-    let onStopService: (Service) -> Void
-    let onRestartService: (Service, Project) -> Void
+    // Phase 4: each carries the WHICH-instance so worktree children act on their
+    // own session, not the service's `.primary`.
+    let onStartService: (Service, Project, SessionInstance) -> Void
+    let onStopService: (Service, SessionInstance) -> Void
+    let onRestartService: (Service, Project, SessionInstance) -> Void
 
     // Pending confirmation targets for destructive actions.
     @State private var serviceToDelete: ServiceDeletion?
     @State private var projectToDelete: ProjectDeletion?
+    // Phase 4: expansion state for worktree-enabled services. A DisclosureGroup's
+    // expansion has no defined home in a List that republishes on every store
+    // mutation (grill M6) — we own it explicitly here.
+    @State private var expanded: Set<UUID> = []
 
     private var sortedProjects: [Project] {
         store.projects.sorted { $0.sortOrder < $1.sortOrder }
@@ -33,31 +41,11 @@ struct SidebarView: View {
                 Section {
                     let services = project.services.sorted { $0.sortOrder < $1.sortOrder }
                     ForEach(services) { service in
-                        ServiceRow(
-                            service: service,
-                            isSelected: selectedServiceID == service.id,
-                            session: sessions.session(for: SessionKey(serviceID: service.id, instance: .primary)),
-                            onStart: { onStartService(service, project) },
-                            onStop: { onStopService(service) },
-                            onRestart: { onRestartService(service, project) }
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            selectedProjectID = project.id
-                            selectedServiceID = service.id
-                        }
-                        .contextMenu {
-                            Button("Add Service…") { onAddService(project.id) }
-                            Divider()
-                            Button("Delete Service", role: .destructive) {
-                                serviceToDelete = ServiceDeletion(
-                                    serviceID: service.id,
-                                    projectID: project.id,
-                                    name: service.name
-                                )
-                            }
-                        }
+                        serviceEntry(service, in: project)
                     }
+                    // `.onMove` is scoped to the SERVICE-level ForEach (grill M6):
+                    // reordering operates on whole services (label rows); worktree
+                    // children are not independently reorderable.
                     .onMove { offsets, destination in
                         store.moveServices(in: project.id, from: offsets, to: destination)
                     }
@@ -128,6 +116,120 @@ struct SidebarView: View {
         }
     }
 
+    // MARK: - Service entry (normal row OR worktree DisclosureGroup)
+
+    /// One service in the sidebar. A worktree-enabled service WITH spawnable
+    /// children renders a `DisclosureGroup` (label = main/`.primary`; children =
+    /// the additional worktrees). Otherwise — the common path, including a
+    /// worktree-enabled service with only a main worktree — it's a plain row.
+    @ViewBuilder
+    private func serviceEntry(_ service: Service, in project: Project) -> some View {
+        let scan = worktrees.scan(for: project.id)
+        let showFanOut = service.worktreeEnabled && (scan?.hasFanOut ?? false)
+
+        if showFanOut, let children = scan?.fanOutChildren {
+            DisclosureGroup(isExpanded: expansionBinding(service.id)) {
+                ForEach(children) { wt in
+                    serviceRow(service, project,
+                               instance: wt.sessionInstance(),
+                               label: wt.displayName,
+                               spawnable: wt.isSpawnableChild,
+                               refresh: nil)
+                }
+            } label: {
+                // Label = the main/`.primary` row, with a re-scan affordance and a
+                // roll-up badge for collapsed-child crashes (grill M7).
+                serviceRow(service, project,
+                           instance: .primary,
+                           label: service.name,
+                           spawnable: true,
+                           refresh: { Task { await worktrees.refresh(project) } },
+                           rollUp: expanded.contains(service.id) ? nil : childRollUp(service, children))
+            }
+        } else {
+            serviceRow(service, project,
+                       instance: .primary,
+                       label: service.name,
+                       spawnable: true,
+                       refresh: nil)
+        }
+    }
+
+    /// A single tappable row for a (service, instance). Looks up its OWN session by
+    /// the full key, reports intent via instance-carrying closures, and computes
+    /// selection per `(serviceID, instance)`.
+    @ViewBuilder
+    private func serviceRow(_ service: Service,
+                            _ project: Project,
+                            instance: SessionInstance,
+                            label: String,
+                            spawnable: Bool,
+                            refresh: (() -> Void)?,
+                            rollUp: RollUpStatus? = nil) -> some View {
+        let key = SessionKey(serviceID: service.id, instance: instance)
+        ServiceRow(
+            service: service,
+            label: label,
+            isSelected: selectedServiceID == service.id && selectedInstance == instance,
+            spawnable: spawnable,
+            session: sessions.session(for: key),
+            rollUp: rollUp,
+            onRefresh: refresh,
+            onStart: { onStartService(service, project, instance) },
+            onStop: { onStopService(service, instance) },
+            onRestart: { onRestartService(service, project, instance) }
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            selectedProjectID = project.id
+            selectedServiceID = service.id
+            selectedInstance = instance
+        }
+        .contextMenu {
+            Button("Add Service…") { onAddService(project.id) }
+            Divider()
+            Button("Delete Service", role: .destructive) {
+                serviceToDelete = ServiceDeletion(
+                    serviceID: service.id,
+                    projectID: project.id,
+                    name: service.name
+                )
+            }
+        }
+    }
+
+    private func expansionBinding(_ serviceID: UUID) -> Binding<Bool> {
+        Binding(
+            get: { expanded.contains(serviceID) },
+            set: { isOn in
+                if isOn { expanded.insert(serviceID) } else { expanded.remove(serviceID) }
+            }
+        )
+    }
+
+    /// Roll-up over a collapsed service's worktree-child sessions (grill M7): if any
+    /// child session is crashed or non-user-exited, surface it on the label so a
+    /// crash isn't hidden behind a collapsed chevron. Reads the live session dict.
+    private func childRollUp(_ service: Service, _ children: [Worktree]) -> RollUpStatus? {
+        var sawCrash = false
+        var sawExit = false
+        for wt in children {
+            let key = SessionKey(serviceID: service.id, instance: wt.sessionInstance())
+            guard let session = sessions.session(for: key) else { continue }
+            switch session.status {
+            case .crashed:
+                sawCrash = true
+            case let .exited(_, byUser) where byUser == false:
+                sawExit = true
+            default:
+                break
+            }
+        }
+        if sawCrash { return .crashed }
+        if sawExit { return .exited }
+        return nil
+    }
+
     private var serviceDeleteBinding: Binding<Bool> {
         Binding(
             get: { serviceToDelete != nil },
@@ -156,12 +258,29 @@ private struct ProjectDeletion: Identifiable {
     var id: UUID { projectID }
 }
 
+/// Roll-up status shown on a collapsed worktree-service label so a hidden child's
+/// crash/exit isn't invisible behind the chevron (grill M7).
+enum RollUpStatus {
+    case crashed
+    case exited
+}
+
 struct ServiceRow: View {
     let service: Service
+    /// The display label — the service name for a `.primary`/main row, or the
+    /// worktree's branch/short label for a child row.
+    let label: String
     let isSelected: Bool
-    /// The live session for this service, if one exists. Passed in (not looked up
-    /// here) so the row stays dumb. When present, its status drives the dot.
+    /// Whether this row's instance can be (re)started. False for a vanished/
+    /// prunable worktree → start/restart controls are suppressed (grill m12/B3).
+    let spawnable: Bool
+    /// The live session for this row's instance, if one exists. Passed in (not
+    /// looked up here) so the row stays dumb. When present, its status drives the dot.
     let session: TerminalSession?
+    /// Collapsed-child roll-up badge for a worktree-service label (M7); nil otherwise.
+    let rollUp: RollUpStatus?
+    /// Manual re-scan affordance, shown only on a worktree-service label.
+    let onRefresh: (() -> Void)?
     // Intent callbacks for the hover-revealed lifecycle controls.
     let onStart: () -> Void
     let onStop: () -> Void
@@ -179,15 +298,25 @@ struct ServiceRow: View {
                 .font(.system(size: 11))
                 .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 .frame(width: 14)
-            Text(service.name)
+            Text(label)
                 .font(.system(size: 13))
+            if let rollUp {
+                Circle()
+                    .fill(rollUp == .crashed ? Color.red : Color.gray)
+                    .frame(width: 6, height: 6)
+                    .help(rollUp == .crashed ? "A worktree session crashed" : "A worktree session exited")
+            }
             Spacer()
+            if isHovering, let onRefresh {
+                ControlButton(symbol: "arrow.clockwise.circle", help: "Rescan worktrees", action: onRefresh)
+            }
             // Hover controls (start/stop/restart) appear on hover; the status dot
             // is always visible. `ServiceControls` observes the session so the
             // button set tracks status with zero polling.
             ServiceControls(
                 session: session,
                 showControls: isHovering,
+                spawnable: spawnable,
                 onStart: onStart,
                 onStop: onStop,
                 onRestart: onRestart
@@ -207,6 +336,9 @@ struct ServiceRow: View {
 private struct ServiceControls: View {
     let session: TerminalSession?
     let showControls: Bool
+    /// When false (a vanished/prunable worktree) start & restart are suppressed so
+    /// we never spawn into a non-existent cwd or relaunch in the wrong tree (m12/B3).
+    let spawnable: Bool
     let onStart: () -> Void
     let onStop: () -> Void
     let onRestart: () -> Void
@@ -217,14 +349,16 @@ private struct ServiceControls: View {
             ObservingControls(
                 session: session,
                 showControls: showControls,
+                spawnable: spawnable,
                 onStart: onStart,
                 onStop: onStop,
                 onRestart: onRestart
             )
         } else {
-            // No session yet: only a Play button (on hover); no dot.
+            // No session yet: only a Play button (on hover, and only if spawnable);
+            // no dot. A prunable/vanished worktree gets neither.
             HStack(spacing: 6) {
-                if showControls {
+                if showControls && spawnable {
                     ControlButton(symbol: "play.fill", help: "Start", action: onStart)
                 }
             }
@@ -235,6 +369,7 @@ private struct ServiceControls: View {
 private struct ObservingControls: View {
     @ObservedObject var session: TerminalSession
     let showControls: Bool
+    let spawnable: Bool
     let onStart: () -> Void
     let onStop: () -> Void
     let onRestart: () -> Void
@@ -250,12 +385,17 @@ private struct ObservingControls: View {
         HStack(spacing: 6) {
             if showControls {
                 if isLive {
+                    // A live session can always be stopped, even if its worktree
+                    // vanished — stop just frees the surface.
                     ControlButton(symbol: "stop.fill", help: "Stop", action: onStop)
-                } else {
+                } else if spawnable {
                     ControlButton(symbol: "play.fill", help: "Start", action: onStart)
                 }
-                // A session exists in any state → restart is always available.
-                ControlButton(symbol: "arrow.clockwise", help: "Restart", action: onRestart)
+                // Restart is offered only when the instance is spawnable (a vanished
+                // worktree's restart is disabled — m12, no wrong-tree relaunch).
+                if spawnable {
+                    ControlButton(symbol: "arrow.clockwise", help: "Restart", action: onRestart)
+                }
             }
             // Status dot is always visible, even when not hovering.
             StatusDot(session: session)

@@ -124,6 +124,15 @@ and `shell` services.
    the surface shows "process exited" rather than dropping to a shell — it matches the
    "service" model. Switching to land-in-a-shell-after is a small tweak if wanted.
 
+8. **Codable defaults do NOT round-trip — use `decodeIfPresent`.** Swift's *synthesized*
+   `Decodable` throws `keyNotFound` for a missing key even when the property has a default
+   value. So "additive, defaulted" model fields (`sortOrder`, `environment`, `restartPolicy`,
+   `worktreeEnabled`) do **not** silently load from an older `projects.json` — decode throws,
+   and since `ProjectStore.init` does `(try? load()) ?? []`, the user's projects would
+   **silently vanish** (masked earlier only by `seedDefaults`, which Phase 3 removed).
+   `Project`/`Service` now have explicit `init(from:)` decoders using
+   `decodeIfPresent(...) ?? default` for every field. Add new persisted fields this way.
+
 ---
 
 ## 7. Roadmap
@@ -134,8 +143,8 @@ and `shell` services.
 | **1.5 — Session decoupling** | Extract `SessionManager`/`TerminalSession`; retire `@StateObject`+`.id()` terminal ownership; AppKit host container so sessions survive switching. **Critical path — gates all later phases.** | ✅ Done |
 | **2 — Projects & Services** | Add/edit/delete projects & services in-app (currently seed-only), config UI | ✅ Done |
 | **3 — Process management** | Per-service start/stop/restart (hover controls), status dots, auto-restart. **Strategy E′: status from ghostty `terminalDidClose`; Stop = surface teardown.** Per-service controls replaced the top toolbar; seeded project removed. (Log panel deferred.) | ✅ Done |
-| **4 — Worktrees** | Auto-detect git worktrees, launch services per worktree | ⬜ |
-| **5 — Agent layer** | Parse Claude output for working/waiting state, show in sidebar, quick-launch presets | ⬜ |
+| **4 — Worktrees** | Auto-detect git worktrees (`WorktreeService`), run a service per worktree (sidebar `DisclosureGroup`); one service → N `SessionKey(.worktree(branch:))` sessions; detached keyed by path-hash; prunable/bare excluded; derived-not-persisted (only `worktreeEnabled`). | ✅ Done |
+| **5 — Agent layer** | Parse Claude output for working/waiting state, show in sidebar, quick-launch presets | ⬜ Planned — Next |
 | **6 — Always-on** | Sessions survive app close (tmux-backed), menu-bar pulse, notifications | ⬜ |
 | **7 — Polish** | Split panes, command palette (⌘K), themes (GhosttyTheme — 485 schemes), keybindings, terminfo fidelity | ⬜ |
 

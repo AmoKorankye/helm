@@ -11,12 +11,15 @@ struct InspectorView: View {
 
     let selectedProjectID: UUID?
     let selectedServiceID: UUID?
+    /// Which session instance the detail pane currently shows — the restart banner
+    /// is per-session, so it must compare against THIS instance's resolved cwd.
+    let selectedInstance: SessionInstance
 
     var body: some View {
         Group {
             if let sel = store.service(id: selectedServiceID) {
                 // `.id` re-seeds the editor's draft when the selection changes.
-                ServiceInspector(service: sel.service, project: sel.project)
+                ServiceInspector(service: sel.service, project: sel.project, instance: selectedInstance)
                     .id(sel.service.id)
             } else if let project = store.project(id: selectedProjectID) {
                 ProjectInspector(project: project)
@@ -112,17 +115,20 @@ private struct ProjectInspector: View {
 private struct ServiceInspector: View {
     @EnvironmentObject private var store: ProjectStore
     @EnvironmentObject private var sessions: SessionManager
+    @EnvironmentObject private var worktrees: WorktreeStore
     @EnvironmentObject private var supervisor: ProcessSupervisor
 
     let service: Service
     let project: Project
+    let instance: SessionInstance
 
     @State private var draft: ServiceDraft
     @State private var errors: [ValidationError] = []
 
-    init(service: Service, project: Project) {
+    init(service: Service, project: Project, instance: SessionInstance) {
         self.service = service
         self.project = project
+        self.instance = instance
         _draft = State(initialValue: ServiceDraft(from: service))
     }
 
@@ -143,10 +149,12 @@ private struct ServiceInspector: View {
                             // Phase-2 close+reselect stub. Cancel any supervisor
                             // backoff so a manual restart wins the race.
                             supervisor.cancel(banner.key)
+                            let cwd = worktrees.workingDirectory(for: instance, in: project)
+                                      ?? project.directory
                             sessions.rebuild(
                                 key: banner.key,
                                 command: service.command,
-                                workingDirectory: project.directory
+                                workingDirectory: cwd
                             )
                         }
                     }
@@ -164,6 +172,7 @@ private struct ServiceInspector: View {
                         Text(policy.label).tag(policy)
                     }
                 }
+                Toggle("Run per git worktree", isOn: $draft.worktreeEnabled)
             }
 
             Section {
@@ -179,15 +188,21 @@ private struct ServiceInspector: View {
             || draft.command != service.command
             || draft.autoStart != service.autoStart
             || draft.restartPolicy != service.restartPolicy
+            || draft.worktreeEnabled != service.worktreeEnabled
     }
 
-    /// Drift detection: if a live session exists for this service and its spawned
-    /// command/cwd differ from what's saved, surface a restart affordance.
+    /// Drift detection (instance-aware, grill M1): if the live session for THIS
+    /// instance was spawned with a command/cwd differing from the saved settings,
+    /// surface a restart affordance. The expected cwd for `.primary` is
+    /// `project.directory` VERBATIM (never the scan's symlink-resolved path), so a
+    /// `/tmp` vs `/private/tmp` mismatch can no longer raise a false banner.
     private var restartBanner: (key: SessionKey, message: String)? {
-        let key = SessionKey(serviceID: service.id, instance: .primary)
+        let key = SessionKey(serviceID: service.id, instance: instance)
         guard let session = sessions.session(for: key) else { return nil }
+        let expectedCwd = worktrees.workingDirectory(for: instance, in: project)
+                          ?? project.directory
         let commandDrift = session.command != service.command
-        let dirDrift = session.workingDirectory != project.directory
+        let dirDrift = session.workingDirectory != expectedCwd
         guard commandDrift || dirDrift else { return nil }
         return (key, "The running session was started with a different command or directory. Restart to pick up the saved settings.")
     }
