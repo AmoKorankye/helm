@@ -4,7 +4,7 @@ import Foundation
 /// `Service.agentKindOverride` stores an explicit user choice; `nil` means AUTO
 /// (derive from the command via `autodetect`). `.none` is an explicit
 /// "this is NOT an agent" override.
-enum AgentKind: String, Codable, Hashable, CaseIterable, Identifiable {
+nonisolated enum AgentKind: String, Codable, Hashable, CaseIterable, Identifiable {
     case none      // explicit "not an agent" override
     case claude
     case generic   // some other CLI agent the user marked

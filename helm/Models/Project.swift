@@ -1,6 +1,6 @@
 import Foundation
 
-struct Project: Identifiable, Codable, Hashable {
+nonisolated struct Project: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
     var directory: String
@@ -29,7 +29,7 @@ struct Project: Identifiable, Codable, Hashable {
     }
 }
 
-struct Service: Identifiable, Codable, Hashable {
+nonisolated struct Service: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
     var command: String
@@ -121,7 +121,7 @@ struct Service: Identifiable, Codable, Hashable {
 
 /// Auto-restart policy for a service's process (Phase 3). Codable as its raw
 /// string so the JSON stays human-readable and forward-compatible.
-enum RestartPolicy: String, Codable, Hashable, CaseIterable, Identifiable {
+nonisolated enum RestartPolicy: String, Codable, Hashable, CaseIterable, Identifiable {
     /// Never auto-restart; the user restarts manually from the overlay/inspector.
     case never
     /// Restart only on a crash (non-zero exit / unexpected signal we didn't ask

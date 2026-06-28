@@ -4,7 +4,7 @@ import Combine
 /// Codable mirror of `SessionInstance` (which is not Codable and carries non-
 /// Codable associated values cleanly enough). Lets a record round-trip the
 /// instance so reattach can rebuild the exact `SessionKey`.
-enum SessionInstanceCoding: Codable, Hashable {
+nonisolated enum SessionInstanceCoding: Codable, Hashable {
     case primary
     case worktree(branch: String)
     case adHoc(id: UUID)
@@ -27,7 +27,7 @@ enum SessionInstanceCoding: Codable, Hashable {
 }
 
 /// One authoritative record for a persistent tmux session, keyed by its slug.
-struct TmuxSessionRecord: Codable, Hashable {
+nonisolated struct TmuxSessionRecord: Codable, Hashable {
     let slug: String
     let serviceID: UUID
     let instance: SessionInstanceCoding

@@ -4,7 +4,7 @@ import Foundation
 /// `.primary` is the default one-session-per-service case. `.worktree`
 /// arrives in Phase 4 (git worktrees) and `.adHoc` covers throwaway sessions.
 /// Keeping this as a closed enum makes Phase 4 additive rather than a rewrite.
-enum SessionInstance: Hashable {
+nonisolated enum SessionInstance: Hashable {
     case primary
     case worktree(branch: String)
     case adHoc(UUID)
@@ -13,7 +13,7 @@ enum SessionInstance: Hashable {
 /// Composite, value-type identity for a terminal session. Decouples session
 /// lifetime from any SwiftUI view identity. The `slug` is tmux-safe so Phase 6
 /// (tmux-backed persistence) can reuse it directly as a session name.
-struct SessionKey: Hashable {
+nonisolated struct SessionKey: Hashable {
     let serviceID: UUID
     let instance: SessionInstance
 

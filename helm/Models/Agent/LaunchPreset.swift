@@ -5,7 +5,7 @@ import Foundation
 /// starts it (B1 / plan §4.2). It is NOT a session and NOT a persisted service
 /// itself — just a template. Codable; persisted in its OWN file (m4) via
 /// `PresetPersistenceStore`. Pure value type (no GhosttyTerminal).
-struct LaunchPreset: Identifiable, Codable, Hashable {
+nonisolated struct LaunchPreset: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String              // "Claude (resume)"
     var command: String           // "claude --resume"
