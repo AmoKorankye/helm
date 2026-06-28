@@ -39,72 +39,25 @@ struct TmuxService: Sendable {
         case gone
     }
 
-    // MARK: - Command construction (pure; the ONLY shell-string composition site, B1)
+    // MARK: - Command construction (delegates to pure TmuxLauncher, B1)
 
     /// The full `/bin/zsh -lc "<launcher>"` string handed to ghostty's
-    /// `config.custom("command", …)` for a PERSISTENT service. ghostty argv-splits
-    /// this and execs token 0 (`/bin/zsh`) with args `-lc` and the double-quoted
-    /// launcher — so the launcher itself runs under a login shell (Layer 1).
-    ///
-    /// The launcher (Layer 2) is a single `;`-joined shell line: has-session →
-    /// dead-pane guard (M2) → create-or-skip → `exec attach`. Every interpolated
-    /// value (dir, inner command) is `shellSingleQuote`d so a value containing `'`
-    /// and/or `"` survives intact (verified round-trip, audit N).
-    ///
-    /// `innerCommand` (Layer 3) is the user's command; it is wrapped as
-    /// `/bin/zsh -lic "<command>"` — byte-identical environment semantics to the
-    /// non-persistent path — then single-quoted as ONE tmux argument.
+    /// `config.custom("command", …)` for a PERSISTENT service. The three quote
+    /// layers are PURE string construction and live in `TmuxLauncher`; this method
+    /// only supplies the resolved tmux path (the one piece of IO-derived state) and
+    /// the socket, then delegates. Byte-identical to the pre-extraction output.
     func attachCommand(slug: String,
                        innerCommand: String,
                        workingDirectory: String,
                        confPath: String) -> String {
-        let tmux = tmuxPath ?? "/opt/homebrew/bin/tmux"
-        let inner = Self.innerShellCommand(innerCommand)
-        let innerSQ = Self.shellSingleQuote(inner)
-        let dirSQ = Self.shellSingleQuote(workingDirectory)
-        let confSQ = Self.shellSingleQuote(confPath)
-        let tmuxSQ = Self.shellSingleQuote(tmux)
-
-        // Layer 2 — the launcher shell line. `slug` is `[a-z0-9-]`-safe so it needs
-        // no quoting; dir/inner/conf/tmux are single-quoted.
-        let create = "\(tmuxSQ) -L \(Self.socket) -f \(confSQ) new-session -d -s \(slug) -c \(dirSQ) \(innerSQ)"
-        let launcher =
-            "if \(tmuxSQ) -L \(Self.socket) has-session -t \(slug) 2>/dev/null; then "
-            + "if [ \"$(\(tmuxSQ) -L \(Self.socket) list-panes -t \(slug) -F '#{pane_dead}' 2>/dev/null | head -1)\" = \"1\" ]; then "
-            + "\(tmuxSQ) -L \(Self.socket) kill-session -t \(slug); \(create); fi; "
-            + "else \(create); fi; "
-            + "exec \(tmuxSQ) -L \(Self.socket) -u attach -t \(slug)"
-
-        // Layer 1 — wrap for ghostty: /bin/zsh -lc "<launcher>". Escape only what a
-        // double-quoted zsh string needs: `\` and `"`. The launcher contains no
-        // bare `` ` `` or `$` outside the single-quoted `$(...)` (which we WANT zsh
-        // to evaluate), so they're left intact.
-        let escaped = launcher
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        return "/bin/zsh -lc \"\(escaped)\""
-    }
-
-    /// The Layer-3 inner command: `/bin/zsh -lic "<command>"` (matches the non-
-    /// persistent path exactly). An empty command → a plain login interactive shell.
-    static func innerShellCommand(_ command: String) -> String {
-        if command.isEmpty {
-            return "/bin/zsh -lic"
-        }
-        // Inside the double-quoted inner string, escape `\` and `"` (the same rule
-        // the non-persistent path relies on implicitly).
-        let esc = command
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        return "/bin/zsh -lic \"\(esc)\""
-    }
-
-    /// Wrap a value for safe inclusion in a POSIX shell line: enclose in single
-    /// quotes, replacing every `'` with the 4-char sequence `'\''`. Double quotes
-    /// and every other metacharacter are literal inside single quotes. Verified
-    /// `eval`-round-trip against a value containing BOTH `'` and `"` (audit N).
-    static func shellSingleQuote(_ s: String) -> String {
-        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        TmuxLauncher.attachCommand(
+            slug: slug,
+            innerCommand: innerCommand,
+            workingDirectory: workingDirectory,
+            confPath: confPath,
+            tmuxPath: tmuxPath ?? "/opt/homebrew/bin/tmux",
+            socket: Self.socket
+        )
     }
 
     // MARK: - Discovery / liveness (bounded; off-main; -L helm; M1 ordering)
@@ -181,7 +134,7 @@ struct TmuxService: Sendable {
     static func configContents(deathsLogPath: String) -> String {
         // The hook value is itself a quoted run-shell string; the path is single-
         // quoted inside it so a space in "Application Support" is safe.
-        let pathSQ = shellSingleQuote(deathsLogPath)
+        let pathSQ = TmuxLauncher.shellSingleQuote(deathsLogPath)
         return """
         set  -g  remain-on-exit on
         set  -g  destroy-unattached off
@@ -203,7 +156,7 @@ struct TmuxService: Sendable {
     /// Begin piping the session's pane to a file (RAW PTY bytes incl. ANSI — the
     /// caller ANSI-strips before display, M6). `-o` toggles the pipe on.
     func startPipePane(slug: String, toFile path: String) {
-        let pathSQ = Self.shellSingleQuote(path)
+        let pathSQ = TmuxLauncher.shellSingleQuote(path)
         _ = run(["pipe-pane", "-t", slug, "-o", "cat >> \(pathSQ)"])
     }
 

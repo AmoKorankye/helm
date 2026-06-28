@@ -236,6 +236,10 @@ was removed (fresh install starts empty). The pid-discovery + kqueue machinery
   `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`).
 - `⌘R` to run. CLI build check:
   `xcodebuild -project helm.xcodeproj -scheme helm -configuration Debug build`.
+- **Tests** (added in the 2026-06-28 architecture pass — the repo's first):
+  `xcodebuild test -project helm.xcodeproj -scheme helm -destination 'platform=macOS'`
+  (35 tests in the `helmTests` target — `TmuxLauncher` quoting, `JSONFileStore`,
+  worktree porcelain parse, `SessionKey.slug` injectivity, `AnsiStripper`).
 - Package dependency is already resolved (`libghostty-spm`, pinned in `Package.resolved`).
   Runtime libghostty is **1.3.1**.
 - Bundle id: `com.amokorankye.helm`. Repo root: `~/Desktop/amokorankye/dev/helm/helm/`
