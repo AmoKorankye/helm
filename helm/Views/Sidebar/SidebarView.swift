@@ -33,20 +33,11 @@ struct SidebarView: View {
 
     // MARK: Adaptive palette
 
-    private var bg: Color {
-        colorScheme == .dark ? Color(white: 0.11) : Color(white: 0.96)
-    }
-    private var footerBg: Color {
-        colorScheme == .dark ? Color(white: 0.09) : Color(white: 0.93)
-    }
     private var rowSelectedBg: Color {
         colorScheme == .dark ? Color(white: 0.20) : Color(white: 0.87)
     }
     private var rowHoverBg: Color {
         colorScheme == .dark ? Color(white: 0.16) : Color(white: 0.91)
-    }
-    private var folderColor: Color {
-        colorScheme == .dark ? Color(white: 0.48) : Color(white: 0.42)
     }
     private var projectTextColor: Color {
         colorScheme == .dark ? Color(white: 0.88) : Color(white: 0.12)
@@ -76,8 +67,9 @@ struct SidebarView: View {
             footerBar
         }
         .background {
-            SidebarShape(cornerRadius: 22)
-                .fill(bg)
+            // Native macOS sidebar vibrancy, clipped to the rounded panel shape.
+            VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                .clipShape(SidebarShape(cornerRadius: 22))
                 .ignoresSafeArea(.all)
         }
         .sheet(isPresented: $showManagePresets) { ManagePresetsSheet() }
@@ -139,18 +131,26 @@ struct SidebarView: View {
         let isExpanded = !collapsedProjects.contains(project.id)
         let isHovered  = hoveredProjectID == project.id
 
-        HStack(spacing: 8) {
-            Image(systemName: isExpanded ? "folder.fill" : "folder")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(folderColor)
-                .frame(width: 16, alignment: .center)
+        HStack(spacing: 0) {
+            // Disclosure arrow — left of the icon; points right (closed) / down (open).
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(metaColor)
+                .rotationEffect(isExpanded ? .degrees(90) : .degrees(0))
+                .animation(.easeInOut(duration: 0.15), value: isExpanded)
+                .frame(width: HelmLayout.rowChevronColumn, alignment: .center)
+                .padding(.trailing, HelmLayout.rowChevronGap)
+
+            ProjectIcon(name: project.name)
+                .frame(width: HelmLayout.rowIconColumn, height: HelmLayout.rowIconColumn)
+                .padding(.trailing, HelmLayout.rowIconGap)
 
             Text(project.name)
-                .font(.system(size: 13, weight: .medium))
+                .font(HelmFont.app.weight(.medium))
                 .foregroundStyle(projectTextColor)
                 .lineLimit(1)
 
-            Spacer()
+            Spacer(minLength: 6)
 
             // Add-service button, appears on hover
             if isHovered {
@@ -237,37 +237,44 @@ struct SidebarView: View {
         let session    = sessions.session(for: key)
 
         HStack(spacing: 0) {
-            // Indent: aligns service text under the project name
-            Color.clear.frame(width: 36)
-
-            // Fan-out expand chevron
-            if isFanOutParent {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        if expanded.contains(service.id) { expanded.remove(service.id) }
-                        else { expanded.insert(service.id) }
+            // Column 1 (chevron): worktree fan-out toggle for a parent, else empty.
+            // Empty keeps the service name aligned under the project name.
+            Group {
+                if isFanOutParent {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            if expanded.contains(service.id) { expanded.remove(service.id) }
+                            else { expanded.insert(service.id) }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(metaColor)
+                            .rotationEffect(expanded.contains(service.id) ? .degrees(90) : .degrees(0))
+                            .animation(.easeInOut(duration: 0.15), value: expanded.contains(service.id))
                     }
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(metaColor)
-                        .rotationEffect(expanded.contains(service.id) ? .degrees(90) : .degrees(0))
-                        .animation(.easeInOut(duration: 0.15), value: expanded.contains(service.id))
+                    .buttonStyle(.borderless)
+                } else {
+                    Color.clear
                 }
-                .buttonStyle(.borderless)
-                .frame(width: 10)
-                .padding(.trailing, 4)
             }
+            .frame(width: HelmLayout.rowChevronColumn, alignment: .center)
+            .padding(.trailing, HelmLayout.rowChevronGap)
 
-            // Agent badge (keep it compact)
-            if service.isAgent, let session {
-                AgentBadge(session: session)
-                    .frame(width: 12)
-                    .padding(.trailing, 4)
+            // Column 2 (icon position): the status light, on the LEFT of the service,
+            // sitting under the project's icon column.
+            Group {
+                if let session {
+                    StatusDot(session: session)
+                } else {
+                    Color.clear
+                }
             }
+            .frame(width: HelmLayout.rowIconColumn, alignment: .center)
+            .padding(.trailing, HelmLayout.rowIconGap)
 
             Text(label)
-                .font(.system(size: 12, weight: .regular))
+                .font(HelmFont.app)
                 .foregroundStyle(isSelected ? serviceSelectedTextColor : serviceTextColor)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -276,7 +283,7 @@ struct SidebarView: View {
 
             Spacer(minLength: 6)
 
-            // Trailing: hover controls or persistent pin + status dot
+            // Trailing: hover controls, else persistent pin + agent badge.
             HStack(spacing: 5) {
                 if isHovered {
                     if let refresh {
@@ -293,8 +300,8 @@ struct SidebarView: View {
                             .font(.system(size: 8))
                             .foregroundStyle(metaColor)
                     }
-                    if let session {
-                        StatusDot(session: session)
+                    if service.isAgent, let session {
+                        AgentBadge(session: session)
                     }
                 }
             }
@@ -331,7 +338,7 @@ struct SidebarView: View {
     private var orphansSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("DETACHED")
-                .font(.system(size: 10, weight: .medium))
+                .font(HelmFont.app.weight(.medium))
                 .tracking(0.4)
                 .foregroundStyle(metaColor)
                 .padding(.horizontal, 16)
@@ -342,14 +349,14 @@ struct SidebarView: View {
                 HStack(spacing: 0) {
                     Color.clear.frame(width: 36)
                     Text(orphan.label)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(HelmFont.app)
                         .foregroundStyle(serviceTextColor)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer(minLength: 6)
                     Button("Kill") { coordinator.killOrphan(slug: orphan.slug) }
                         .buttonStyle(.borderless)
-                        .font(.system(size: 10))
+                        .font(HelmFont.app)
                         .foregroundStyle(metaColor)
                 }
                 .padding(.vertical, 5)
@@ -398,13 +405,8 @@ struct SidebarView: View {
             }
             .padding(.horizontal, 4)
         }
-        .background(footerBg)
-        // Round the footer's bottom-right to match SidebarShape; the left stays
-        // square (flush with the window frame).
-        .clipShape(
-            UnevenRoundedRectangle(bottomLeadingRadius: 0, bottomTrailingRadius: 22,
-                                   style: .continuous)
-        )
+        // No opaque fill — the sidebar vibrancy shows through; the top divider
+        // is the only separation, matching native bottom sidebar bars.
     }
 
     private func footerIconBtn(_ symbol: String, _ tip: String, _ action: @escaping () -> Void) -> some View {
@@ -565,13 +567,14 @@ private struct ObservingControls: View {
     }
 
     var body: some View {
+        // The status light now lives on the LEFT of the row (always visible), so
+        // these hover controls are buttons only — no trailing dot.
         HStack(spacing: 4) {
             if showControls {
                 if isLive        { iconBtn("stop.fill",       "Stop",    onStop) }
                 else if spawnable { iconBtn("play.fill",       "Start",   onStart) }
                 if spawnable     { iconBtn("arrow.clockwise", "Restart", onRestart) }
             }
-            StatusDot(session: session)
         }
     }
 
@@ -616,6 +619,43 @@ private struct RollUpBadge: View {
         case .crashed: Circle().fill(Color.red).frame(width: 5, height: 5)
         case .exited:  Circle().fill(Color.gray).frame(width: 5, height: 5)
         }
+    }
+}
+
+// MARK: - ProjectIcon
+
+/// A project's avatar: a custom icon image when one is provided, otherwise the
+/// project's initials on a blue rounded square. (Projects have no icon field
+/// yet, so `image` is nil today and initials render — wire `image` through when
+/// `Project` gains a custom-icon source.)
+private struct ProjectIcon: View {
+    let name: String
+    var image: Image? = nil
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+            .fill(Color(red: 0.20, green: 0.51, blue: 0.96))
+            .overlay {
+                if let image {
+                    image.resizable().scaledToFill()
+                } else {
+                    Text(initials)
+                        .font(HelmFont.app.weight(.semibold))
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                        .foregroundStyle(.white)
+                        .padding(2)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+
+    private var initials: String {
+        let parts = name.split(whereSeparator: { " -_/".contains($0) })
+        let letters = parts.count >= 2
+            ? String(parts[0].prefix(1)) + String(parts[1].prefix(1))
+            : String(name.prefix(2))
+        return letters.uppercased()
     }
 }
 

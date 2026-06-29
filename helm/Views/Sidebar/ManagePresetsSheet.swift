@@ -14,21 +14,21 @@ struct ManagePresetsSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Launch Presets")
-                .font(.headline)
+                .font(HelmFont.app.weight(.semibold))
 
             // Existing presets.
             if presets.sorted.isEmpty {
                 Text("No presets. Add one below.")
-                    .font(.subheadline)
+                    .font(HelmFont.app)
                     .foregroundStyle(.secondary)
             } else {
                 List {
                     ForEach(presets.sorted) { preset in
                         HStack(spacing: 8) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(preset.name).font(.system(size: 13, weight: .medium))
+                                Text(preset.name).font(HelmFont.app.weight(.medium))
                                 Text(preset.command)
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(HelmFont.app)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -56,15 +56,15 @@ struct ManagePresetsSheet: View {
 
             // Add / edit form.
             Text(editingID == nil ? "New Preset" : "Edit Preset")
-                .font(.subheadline.weight(.semibold))
+                .font(HelmFont.app.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Name").font(.caption).foregroundStyle(.secondary)
+                Text("Name").font(HelmFont.app).foregroundStyle(.secondary)
                 TextField("Claude (resume)", text: $draft.name)
                     .textFieldStyle(.roundedBorder)
             }
             VStack(alignment: .leading, spacing: 6) {
-                Text("Command").font(.caption).foregroundStyle(.secondary)
+                Text("Command").font(HelmFont.app).foregroundStyle(.secondary)
                 TextField("claude --resume", text: $draft.command)
                     .textFieldStyle(.roundedBorder)
             }
@@ -76,7 +76,7 @@ struct ManagePresetsSheet: View {
             .pickerStyle(.menu)
 
             if let error {
-                Text(error).font(.caption).foregroundStyle(.red)
+                Text(error).font(HelmFont.app).foregroundStyle(.red)
             }
 
             HStack {

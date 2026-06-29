@@ -15,7 +15,7 @@ struct ContentView: View {
     @State private var showAddProject = false
     @State private var addServiceTargetProjectID: UUID?
     @State private var sidebarVisible = true
-    @State private var sidebarWidth: CGFloat = 220
+    @State private var sidebarWidth: CGFloat = 330
 
     private static let sidebarMinWidth: CGFloat = 160
     private static let sidebarMaxWidth: CGFloat = 400
@@ -418,10 +418,10 @@ struct WelcomeView: View {
                 .font(.system(size: 48, weight: .light))
                 .foregroundStyle(.tertiary)
             Text("Select a service")
-                .font(HelmFont.ui)
+                .font(HelmFont.app.weight(.medium))
                 .foregroundStyle(.secondary)
             Text("Choose a project and service from the sidebar")
-                .font(HelmFont.mono)
+                .font(HelmFont.app)
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

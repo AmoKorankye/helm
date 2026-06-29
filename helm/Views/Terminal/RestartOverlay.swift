@@ -27,9 +27,9 @@ struct RestartOverlay: View {
                             .font(.system(size: 34, weight: .light))
                             .foregroundStyle(banner.tint)
                         Text(banner.title)
-                            .font(.title3.weight(.semibold))
+                            .font(HelmFont.app.weight(.semibold))
                         Text(banner.subtitle)
-                            .font(.subheadline)
+                            .font(HelmFont.app)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                         Button(action: onRestart) {

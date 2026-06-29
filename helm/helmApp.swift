@@ -22,6 +22,9 @@ struct HelmApp: App {
     @NSApplicationDelegateAdaptor(HelmAppDelegate.self) private var appDelegate
 
     init() {
+        // Register the bundled Inter faces before any view renders.
+        HelmFont.registerBundledFonts()
+
         let store = ProjectStore()
         let worktrees = WorktreeStore()
         // Phase 6: one TmuxService + one authoritative index, shared by the manager

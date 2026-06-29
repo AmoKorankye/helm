@@ -58,24 +58,24 @@ struct HelmMenuBarContent: View {
         let summary = MenuBarSummary(sessions: sessions.sessions)
         VStack(alignment: .leading, spacing: 8) {
             Text("Helm")
-                .font(.headline)
+                .font(HelmFont.app.weight(.semibold))
             Divider()
             Label("\(summary.runningCount) running", systemImage: "play.circle")
-                .font(.callout)
+                .font(HelmFont.app)
             Label("\(summary.detachedCount) detached", systemImage: "pause.circle")
-                .font(.callout)
+                .font(HelmFont.app)
             if summary.needsAttention {
                 Label("A session needs attention", systemImage: "bell.badge.fill")
-                    .font(.callout)
+                    .font(HelmFont.app)
                     .foregroundStyle(.orange)
             }
             if !coordinator.orphans.isEmpty {
                 Divider()
                 Text("Orphan sessions")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(HelmFont.app).foregroundStyle(.secondary)
                 ForEach(coordinator.orphans) { orphan in
                     HStack {
-                        Text(orphan.label).font(.caption).lineLimit(1)
+                        Text(orphan.label).font(HelmFont.app).lineLimit(1)
                         Spacer()
                         Button("Kill") { coordinator.killOrphan(slug: orphan.slug) }
                             .buttonStyle(.borderless)

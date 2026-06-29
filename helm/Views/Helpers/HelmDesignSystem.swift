@@ -1,34 +1,27 @@
 import SwiftUI
+import CoreText
 
 // MARK: – Typography
 //
-// Google Sans (UI chrome) + Geist Mono (content labels).
-//
-// To install the fonts:
-//   1. Download GoogleSans-Medium.ttf from google/fonts (or AOSP)
-//      and GeistMono-Light.ttf / GeistMono-Bold.ttf from vercel/geist-font.
-//   2. Drag all three .ttf files into the helm target in Xcode (Add to target: helm ✓).
-//   3. In Info.plist add "Fonts provided by application" with the three filenames.
-//
-// Until the fonts are installed SwiftUI silently falls back to the system font,
-// so the app continues to build and run without them.
+// One typeface for the whole app: Inter at 12pt. The Regular/Medium/SemiBold
+// faces are bundled (helm/Resources/Fonts) and registered at launch via
+// `HelmFont.registerBundledFonts()`, so no Info.plist font declaration is needed.
 
 enum HelmFont {
-    // Structural UI (section headers, toolbar labels, sheet titles): Google Sans 12pt
-    static var ui: Font { .custom("GoogleSans-Medium", size: 12, relativeTo: .caption) }
+    /// The single app typeface: Inter, 12pt. Weight modifiers (`.weight(.medium)`,
+    /// `.weight(.semibold)`) resolve to the matching bundled face.
+    static let app = Font.custom("Inter", size: 12)
 
-    // Content text (service names, project names, commands): Geist Mono 10pt
-    static var mono: Font     { .custom("GeistMono-Light", size: 10, relativeTo: .caption2) }
-    static var monoBold: Font { .custom("GeistMono-Bold",  size: 10, relativeTo: .caption2) }
-}
-
-extension View {
-    // Applies Geist Mono with the specified line-spacing and letter-spacing.
-    func helmMono(bold: Bool = false) -> some View {
-        self
-            .font(bold ? HelmFont.monoBold : HelmFont.mono)
-            .lineSpacing(2)      // 1.2 × 10pt → +2pt additional gap
-            .tracking(1.0)
+    /// Registers the bundled Inter faces with CoreText (process scope) so
+    /// `Font.custom("Inter", …)` resolves. Safe to call once at launch.
+    static func registerBundledFonts() {
+        let faces = ["Inter-Regular", "Inter-Medium", "Inter-SemiBold"]
+        let urls = faces.compactMap { name in
+            Bundle.main.url(forResource: name, withExtension: "ttf")
+                ?? Bundle.main.url(forResource: name, withExtension: "ttf", subdirectory: "Fonts")
+        }
+        guard !urls.isEmpty else { return }
+        CTFontManagerRegisterFontURLs(urls as CFArray, .process, true, nil)
     }
 }
 
@@ -36,6 +29,14 @@ extension View {
 
 enum HelmLayout {
     static let listFadeHeight: CGFloat = 22
+
+    // Sidebar row leading columns — shared by the project row and service row so a
+    // service name lines up exactly under its project name. A service's leading
+    // block (chevron column + icon column + their gaps) equals the project's.
+    static let rowChevronColumn: CGFloat = 12
+    static let rowChevronGap: CGFloat = 6
+    static let rowIconColumn: CGFloat = 20
+    static let rowIconGap: CGFloat = 8
 }
 
 // MARK: – Adaptive solid background

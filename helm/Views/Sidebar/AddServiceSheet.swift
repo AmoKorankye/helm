@@ -16,21 +16,21 @@ struct AddServiceSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("New Service")
-                .font(.headline)
+                .font(HelmFont.app.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Name").font(.subheadline).foregroundStyle(.secondary)
+                Text("Name").font(HelmFont.app).foregroundStyle(.secondary)
                 TextField("claude", text: $draft.name)
                     .textFieldStyle(.roundedBorder)
                 FieldError(errors: errors, field: .name)
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Command").font(.subheadline).foregroundStyle(.secondary)
+                Text("Command").font(HelmFont.app).foregroundStyle(.secondary)
                 TextField("Leave empty for a plain shell", text: $draft.command)
                     .textFieldStyle(.roundedBorder)
                 Text("Empty command opens a shell in the project directory.")
-                    .font(.caption)
+                    .font(HelmFont.app)
                     .foregroundStyle(.tertiary)
             }
 
@@ -40,7 +40,7 @@ struct AddServiceSheet: View {
                 .disabled(!tmuxAvailable)
             if !tmuxAvailable {
                 Text("Requires tmux — `brew install tmux`.")
-                    .font(.caption)
+                    .font(HelmFont.app)
                     .foregroundStyle(.tertiary)
             }
 

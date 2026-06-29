@@ -13,17 +13,17 @@ struct AddProjectSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("New Project")
-                .font(.headline)
+                .font(HelmFont.app.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Name").font(.subheadline).foregroundStyle(.secondary)
+                Text("Name").font(HelmFont.app).foregroundStyle(.secondary)
                 TextField("My Project", text: $draft.name)
                     .textFieldStyle(.roundedBorder)
                 FieldError(errors: errors, field: .name)
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Directory").font(.subheadline).foregroundStyle(.secondary)
+                Text("Directory").font(HelmFont.app).foregroundStyle(.secondary)
                 HStack {
                     Text(draft.directory.isEmpty ? "No directory chosen" : draft.directory)
                         .foregroundStyle(draft.directory.isEmpty ? .tertiary : .primary)

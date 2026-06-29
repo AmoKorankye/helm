@@ -10,7 +10,7 @@ struct FieldError: View {
     var body: some View {
         if let error = errors.first(where: { $0.field == field }) {
             Text(error.message)
-                .font(.caption)
+                .font(HelmFont.app)
                 .foregroundStyle(.red)
         }
     }
