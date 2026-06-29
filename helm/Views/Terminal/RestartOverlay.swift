@@ -21,7 +21,7 @@ struct RestartOverlay: View {
         Group {
             if let banner = banner {
                 ZStack {
-                    Color.black.opacity(0.45).ignoresSafeArea()
+                    Color.helmScrim.ignoresSafeArea()
                     VStack(spacing: 14) {
                         Image(systemName: banner.icon)
                             .font(.system(size: 34, weight: .light))
@@ -40,8 +40,8 @@ struct RestartOverlay: View {
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut("r", modifiers: .command)
                     }
-                    .padding(28)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                    .padding(HelmSpacing.xxl)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: HelmRadius.lg))
                     .frame(maxWidth: 340)
                 }
                 .transition(.opacity)

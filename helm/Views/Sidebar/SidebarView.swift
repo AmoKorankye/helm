@@ -29,32 +29,6 @@ struct SidebarView: View {
     @State private var hoveredProjectID: UUID?
     @State private var hoveredServiceKey: SessionKey?
 
-    @Environment(\.colorScheme) private var colorScheme
-
-    // MARK: Adaptive palette
-
-    private var rowSelectedBg: Color {
-        colorScheme == .dark ? Color(white: 0.20) : Color(white: 0.87)
-    }
-    private var rowHoverBg: Color {
-        colorScheme == .dark ? Color(white: 0.16) : Color(white: 0.91)
-    }
-    private var projectTextColor: Color {
-        colorScheme == .dark ? Color(white: 0.88) : Color(white: 0.12)
-    }
-    private var serviceTextColor: Color {
-        colorScheme == .dark ? Color(white: 0.58) : Color(white: 0.38)
-    }
-    private var serviceSelectedTextColor: Color {
-        colorScheme == .dark ? Color(white: 0.92) : Color(white: 0.08)
-    }
-    private var metaColor: Color {
-        colorScheme == .dark ? Color(white: 0.36) : Color(white: 0.55)
-    }
-    private var footerIconColor: Color {
-        colorScheme == .dark ? Color(white: 0.46) : Color(white: 0.44)
-    }
-
     private var sortedProjects: [Project] {
         store.projects.sorted { $0.sortOrder < $1.sortOrder }
     }
@@ -69,7 +43,7 @@ struct SidebarView: View {
         .background {
             // Native macOS sidebar vibrancy, clipped to the rounded panel shape.
             VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
-                .clipShape(SidebarShape(cornerRadius: 22))
+                .clipShape(SidebarShape(cornerRadius: HelmRadius.panel))
                 .ignoresSafeArea(.all)
         }
         .sheet(isPresented: $showManagePresets) { ManagePresetsSheet() }
@@ -119,8 +93,8 @@ struct SidebarView: View {
                     orphansSection
                 }
             }
-            .padding(.top, 6)
-            .padding(.bottom, 8)
+            .padding(.top, HelmSpacing.sm)
+            .padding(.bottom, HelmSpacing.md)
         }
     }
 
@@ -135,7 +109,7 @@ struct SidebarView: View {
             // Disclosure arrow — left of the icon; points right (closed) / down (open).
             Image(systemName: "chevron.right")
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(metaColor)
+                .foregroundStyle(Color.helmMeta)
                 .rotationEffect(isExpanded ? .degrees(90) : .degrees(0))
                 .animation(.easeInOut(duration: 0.15), value: isExpanded)
                 .frame(width: HelmLayout.rowChevronColumn, alignment: .center)
@@ -147,7 +121,7 @@ struct SidebarView: View {
 
             Text(project.name)
                 .font(HelmFont.app.weight(.medium))
-                .foregroundStyle(projectTextColor)
+                .foregroundStyle(Color.helmText)
                 .lineLimit(1)
 
             Spacer(minLength: 6)
@@ -157,20 +131,20 @@ struct SidebarView: View {
                 Button { onAddService(project.id) } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(metaColor)
+                        .foregroundStyle(Color.helmMeta)
                 }
                 .buttonStyle(.borderless)
                 .help("Add service to \(project.name)")
             }
         }
-        .padding(.vertical, 5)
-        .padding(.horizontal, 12)
+        .padding(.vertical, HelmSpacing.rowV)
+        .padding(.horizontal, HelmSpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(isHovered ? rowHoverBg : Color.clear)
+            RoundedRectangle(cornerRadius: HelmRadius.md, style: .continuous)
+                .fill(isHovered ? Color.helmBgHover : Color.clear)
         )
-        .padding(.horizontal, 4)
+        .padding(.horizontal, HelmSpacing.xs)
         .contentShape(Rectangle())
         .onHover { hoveredProjectID = $0 ? project.id : nil }
         .onTapGesture {
@@ -249,7 +223,7 @@ struct SidebarView: View {
                     } label: {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(metaColor)
+                            .foregroundStyle(Color.helmMeta)
                             .rotationEffect(expanded.contains(service.id) ? .degrees(90) : .degrees(0))
                             .animation(.easeInOut(duration: 0.15), value: expanded.contains(service.id))
                     }
@@ -274,8 +248,8 @@ struct SidebarView: View {
             .padding(.trailing, HelmLayout.rowIconGap)
 
             Text(label)
-                .font(HelmFont.app)
-                .foregroundStyle(isSelected ? serviceSelectedTextColor : serviceTextColor)
+                .font(HelmFont.small)
+                .foregroundStyle(isSelected ? Color.helmTextSelected : Color.helmTextSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
@@ -298,7 +272,7 @@ struct SidebarView: View {
                     if service.persistent {
                         Image(systemName: "pin.fill")
                             .font(.system(size: 8))
-                            .foregroundStyle(metaColor)
+                            .foregroundStyle(Color.helmMeta)
                     }
                     if service.isAgent, let session {
                         AgentBadge(session: session)
@@ -306,14 +280,14 @@ struct SidebarView: View {
                 }
             }
         }
-        .padding(.vertical, 5)
-        .padding(.horizontal, 12)
+        .padding(.vertical, HelmSpacing.rowV)
+        .padding(.horizontal, HelmSpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(isSelected ? rowSelectedBg : (isHovered ? rowHoverBg : Color.clear))
+            RoundedRectangle(cornerRadius: HelmRadius.md, style: .continuous)
+                .fill(isSelected ? Color.helmBgSelected : (isHovered ? Color.helmBgHover : Color.clear))
         )
-        .padding(.horizontal, 4)
+        .padding(.horizontal, HelmSpacing.xs)
         .contentShape(Rectangle())
         .onHover { hoveredServiceKey = $0 ? key : nil }
         .onTapGesture {
@@ -340,27 +314,27 @@ struct SidebarView: View {
             Text("DETACHED")
                 .font(HelmFont.app.weight(.medium))
                 .tracking(0.4)
-                .foregroundStyle(metaColor)
+                .foregroundStyle(Color.helmMeta)
                 .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 4)
+                .padding(.top, HelmSpacing.lg)
+                .padding(.bottom, HelmSpacing.xs)
 
             ForEach(coordinator.orphans) { orphan in
                 HStack(spacing: 0) {
                     Color.clear.frame(width: 36)
                     Text(orphan.label)
-                        .font(HelmFont.app)
-                        .foregroundStyle(serviceTextColor)
+                        .font(HelmFont.small)
+                        .foregroundStyle(Color.helmTextSecondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer(minLength: 6)
                     Button("Kill") { coordinator.killOrphan(slug: orphan.slug) }
                         .buttonStyle(.borderless)
-                        .font(HelmFont.app)
-                        .foregroundStyle(metaColor)
+                        .font(HelmFont.small)
+                        .foregroundStyle(Color.helmMeta)
                 }
-                .padding(.vertical, 5)
-                .padding(.horizontal, 12)
+                .padding(.vertical, HelmSpacing.rowV)
+                .padding(.horizontal, HelmSpacing.lg)
             }
         }
     }
@@ -396,14 +370,14 @@ struct SidebarView: View {
                 } label: {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 12))
-                        .foregroundStyle(footerIconColor)
+                        .foregroundStyle(Color.helmIcon)
                         .frame(width: 36, height: 36)
                 }
                 .menuStyle(.borderlessButton)
                 .frame(width: 36, height: 36)
                 .help("Launch preset")
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, HelmSpacing.xs)
         }
         // No opaque fill — the sidebar vibrancy shows through; the top divider
         // is the only separation, matching native bottom sidebar bars.
@@ -413,7 +387,7 @@ struct SidebarView: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 12))
-                .foregroundStyle(footerIconColor)
+                .foregroundStyle(Color.helmIcon)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
         }
@@ -428,7 +402,7 @@ struct SidebarView: View {
                 .frame(width: 14, height: 14)
         }
         .buttonStyle(.borderless)
-        .foregroundStyle(metaColor)
+        .foregroundStyle(Color.helmMeta)
         .help(tip)
     }
 
@@ -593,7 +567,7 @@ private struct AgentBadge: View {
     var body: some View {
         switch session.agentState {
         case .attention:
-            Image(systemName: "bell.badge.fill").font(.system(size: 9)).foregroundStyle(.orange)
+            Image(systemName: "bell.badge.fill").font(.system(size: 9)).foregroundStyle(Color.helmStatusAttention)
                 .symbolEffect(.pulse, options: .repeating)
         case .working:
             Image(systemName: "ellipsis").font(.system(size: 9)).foregroundStyle(.secondary)
@@ -614,10 +588,10 @@ private struct RollUpBadge: View {
     var body: some View {
         switch status {
         case .attention:
-            Image(systemName: "bell.badge.fill").font(.system(size: 9)).foregroundStyle(.orange)
+            Image(systemName: "bell.badge.fill").font(.system(size: 9)).foregroundStyle(Color.helmStatusAttention)
                 .symbolEffect(.pulse, options: .repeating)
-        case .crashed: Circle().fill(Color.red).frame(width: 5, height: 5)
-        case .exited:  Circle().fill(Color.gray).frame(width: 5, height: 5)
+        case .crashed: Circle().fill(Color.helmStatusCrashed).frame(width: 5, height: 5)
+        case .exited:  Circle().fill(Color.helmStatusExited).frame(width: 5, height: 5)
         }
     }
 }
@@ -633,8 +607,8 @@ private struct ProjectIcon: View {
     var image: Image? = nil
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 5, style: .continuous)
-            .fill(Color(red: 0.20, green: 0.51, blue: 0.96))
+        RoundedRectangle(cornerRadius: HelmRadius.sm, style: .continuous)
+            .fill(Color.helmAccent)
             .overlay {
                 if let image {
                     image.resizable().scaledToFill()
@@ -647,7 +621,7 @@ private struct ProjectIcon: View {
                         .padding(2)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: HelmRadius.sm, style: .continuous))
     }
 
     private var initials: String {
@@ -668,11 +642,11 @@ private struct StatusDot: View {
     }
     private var dotColor: Color {
         switch session.status {
-        case .starting: return .yellow
-        case .running:  return .green
-        case .exited:   return .gray
-        case .crashed:  return .red
-        case .detached: return .blue
+        case .starting: return .helmStatusStarting
+        case .running:  return .helmStatusRunning
+        case .exited:   return .helmStatusExited
+        case .crashed:  return .helmStatusCrashed
+        case .detached: return .helmStatusDetached
         }
     }
     private var helpText: String {

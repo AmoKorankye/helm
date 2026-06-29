@@ -122,7 +122,12 @@ final class TerminalSession: ObservableObject {
         // tmux is NEVER invoked, byte-for-byte the current command construction.
         // Persistent: ghostty execs `/bin/zsh -lc "<launcher>"`, the tmux launcher
         // (B1, three quote layers) built by `TmuxService.attachCommand`.
+        // Base appearance comes from the theme (font size + breathing-room padding);
+        // applies to new sessions immediately, running ones on next rebuild.
         var config = TerminalConfiguration()
+            .fontSize(HelmTheme.terminalFontSize)
+            .windowPaddingX(HelmTheme.terminalPaddingX)
+            .windowPaddingY(HelmTheme.terminalPaddingY)
         if persistent, let tmux, let confPath {
             let launcher = tmux.attachCommand(
                 slug: key.slug,

@@ -6,8 +6,6 @@ struct ContentView: View {
     @EnvironmentObject private var worktrees: WorktreeStore
     @EnvironmentObject private var supervisor: ProcessSupervisor
 
-    @Environment(\.colorScheme) private var colorScheme
-
     @State private var selectedProjectID: UUID?
     @State private var selectedServiceID: UUID?
     @State private var selectedInstance: SessionInstance = .primary
@@ -56,7 +54,7 @@ struct ContentView: View {
                 .ignoresSafeArea(edges: .top)
         }
         .frame(minWidth: 900, minHeight: 600)
-        .background(colorScheme == .dark ? Color(white: 0.07) : Color.white)
+        .background(Color.helmBg)
         // The resize handle lives in an overlay straddling the sidebar/detail
         // seam, so it adds NO layout width — the two panes sit flush together.
         .overlay(alignment: .leading) {
@@ -139,7 +137,7 @@ struct ContentView: View {
                     // created: `ensureSession` creates it as a side effect, then the
                     // republish re-renders here. An already-created session renders
                     // immediately (no flicker on switch).
-                    Color(colorScheme == .dark ? NSColor(white: 0.07, alpha: 1) : .white)
+                    Color.helmBg
                 }
             } else {
                 WelcomeView()
@@ -410,7 +408,6 @@ private struct SidebarDivider: View {
 }
 
 struct WelcomeView: View {
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 12) {
@@ -425,6 +422,6 @@ struct WelcomeView: View {
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(colorScheme == .dark ? Color(white: 0.07) : .white)
+        .background(Color.helmBg)
     }
 }
